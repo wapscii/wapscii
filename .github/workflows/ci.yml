@@ -31,6 +31,10 @@ jobs:
       - name: Run tests
         run: bun test
 
+      - name: Test the search index tool
+        if: runner.os == 'Linux'
+        run: python3 tools/test_maps_search_index.py
+
       - name: Build package
         run: bun run build
 

@@ -8,3 +8,4 @@ tiles
 .DS_Store
 /analysis
 .vscode
+__pycache__/

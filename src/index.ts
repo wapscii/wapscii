@@ -19,3 +19,5 @@ export type { TileFeature, TileLayer } from './Tile';
 export { default as TileSource, TileNotFoundError } from './TileSource';
 export type { TileCacheResetOptions, TileCacheResetResult } from './TileSource';
 export { default as config } from './config';
+export { nominatimProvider, sqliteProvider, parseLocation } from './search';
+export type { Place, SearchProvider } from './search';

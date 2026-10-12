@@ -24,7 +24,8 @@ import InputHandler, { InputEvent } from './InputHandler';
 import Canvas from './Canvas';
 import { getCurrentLocation } from './Geolocation';
 import { showHelpModal } from './HelpModal';
-import { showSearchPrompt, geocodeQuery } from './SearchBox';
+import { showSearchPrompt } from './SearchBox';
+import { clean, nominatimProvider, sqliteProvider, zoomForBox, type Place, type SearchProvider } from './search';
 import { showGlobeView } from './Globe';
 
 // Mouse event types
@@ -56,6 +57,12 @@ export interface MapsciiOptions {
   markerInputs?: MarkerInput[];
   cellGeometry?: { width: number; height: number };
   noLabels?: boolean;
+  /** Offline place index made by tools/maps-search-index */
+  searchDatabase?: string | null;
+  /** Ask Nominatim (on Enter only) for place names */
+  onlineSearch?: boolean;
+  /** Your own place search, instead of the offline index and Nominatim */
+  searchProvider?: SearchProvider;
   colorMode?: ColorMode;
   useTileWorker?: boolean;
   showAttribution?: boolean;
@@ -114,6 +121,7 @@ export default class Mapscii {
   private inputHandler: InputHandler | null = null;
   private markerInputs: MarkerInput[] = [];
   private isInPrompt: boolean = false;  // Flag to prevent key handling during prompts
+  private redrawPrompt: (() => void) | null = null;  // the open prompt, drawn again over new frames
   private locateOnStart: boolean = false;
   private locationSource: string = '';
   private isDrawing: boolean = false;
@@ -680,7 +688,8 @@ export default class Mapscii {
     this.currentDrawPromise = renderer.draw(this.center, this.zoom).then((frame) => {
       this._write(frame);
       this._saveInitialAnsiScreenshotIfRequested();
-      this.notify(this._getFooter());
+      if (this.redrawPrompt) this.redrawPrompt();
+      else this.notify(this._getFooter());
       this.emit('update', this.getState());
     }).catch((error: Error) => {
       this.emit('error', error);
@@ -790,102 +799,51 @@ export default class Mapscii {
     }
   }
 
-  // Handle search using SearchBox module
+  // Search: places by name, coordinates and geohashes (search.ts)
   private async _handleSearch(): Promise<void> {
     this._activateConfig();
+    const database = config.searchDatabase;
+    const local = database ? sqliteProvider(database) : null;
+    const providers = config.searchProvider
+      ? [config.searchProvider]
+      : [local, config.onlineSearch ? nominatimProvider(config.language) : null]
+        .filter((provider): provider is NonNullable<typeof provider> => provider !== null);
+
     this.isInPrompt = true;
-
-    const result = await showSearchPrompt();
-
+    const prompt = showSearchPrompt({ suggest: config.searchProvider ? null : local, providers });
+    this.redrawPrompt = prompt.redraw;
+    const place = await prompt.done;
+    this.redrawPrompt = null;
     this.isInPrompt = false;
+    this._activateConfig();
 
-    if (result.type === 'cancelled' || result.type === 'empty') {
+    if (!place) {
       this._draw();
       return;
     }
+    this._goToPlace(place);
+  }
 
-    if (result.type === 'coordinates' && result.lat !== undefined && result.lon !== undefined) {
-      // Add marker for coordinates
-      this.renderer?.markerStore.upsertMarker({
-        id: `search-${Date.now()}`,
-        lat: result.lat,
-        lon: result.lon,
-        glyph: '⚲',
-        color: '#ff6600',
-      });
+  private _goToPlace(place: Place): void {
+    const label = clean(place.label);
+    const name = label.split(',')[0].trim();
+    this.renderer?.markerStore.upsertMarker({
+      id: `search-${Date.now()}`,
+      lat: place.lat,
+      lon: place.lon,
+      glyph: place.kind === 'geohash' ? '#' : '⚲',
+      color: place.kind === 'geohash' ? '#9933ff' : '#ff6600',
+      label: place.kind === 'coordinates' ? undefined : ` ${name.slice(0, 40)}`,
+    });
 
-      this.center = utils.normalize({ lat: result.lat, lon: result.lon });
-      if (this.zoom < 12) this.zoom = 12;
-      this._draw();
-      this.notify(`[⚲] ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`);
-      return;
-    }
-
-    if (result.type === 'geohash' && result.lat !== undefined && result.lon !== undefined) {
-      // Add marker for geohash location
-      this.renderer?.markerStore.upsertMarker({
-        id: `search-${Date.now()}`,
-        lat: result.lat,
-        lon: result.lon,
-        glyph: '#',
-        color: '#9933ff',
-        label: ` ${result.query}`,
-      });
-
-      this.center = utils.normalize({ lat: result.lat, lon: result.lon });
-      // Geohash zoom based on precision (longer = more precise = higher zoom)
-      const geohashLen = result.query?.length || 6;
-      const targetZoom = Math.min(18, 4 + geohashLen * 1.5);
-      if (this.zoom < targetZoom) this.zoom = targetZoom;
-      this._draw();
-      this.notify(`[#] Geohash: ${result.query} → ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`);
-      return;
-    }
-
-    if (result.type === 'place') {
-      if (result.lat !== undefined && result.lon !== undefined) {
-        // Already have coordinates from dropdown selection
-        this.renderer?.markerStore.upsertMarker({
-          id: `search-${Date.now()}`,
-          lat: result.lat,
-          lon: result.lon,
-          glyph: '⚲',
-          color: '#ff6600',
-          label: ' ' + result.displayName?.split(',')[0],
-        });
-
-        this.center = utils.normalize({ lat: result.lat, lon: result.lon });
-        if (this.zoom < 12) this.zoom = 12;
-        this._draw();
-        this.notify(`[⚲] ${result.displayName?.slice(0, 60) || 'Found'}`);
-      } else if (result.query) {
-        // Need to geocode the query
-        this.notify(`Searching: ${result.query}...`);
-        const geocoded = await geocodeQuery(result.query);
-
-        if (geocoded) {
-          const lat = parseFloat(geocoded.lat);
-          const lon = parseFloat(geocoded.lon);
-
-          this.renderer?.markerStore.upsertMarker({
-            id: `search-${Date.now()}`,
-            lat,
-            lon,
-            glyph: '⚲',
-            color: '#ff6600',
-            label: ' ' + geocoded.display_name.split(',')[0],
-          });
-
-          this.center = utils.normalize({ lat, lon });
-          if (this.zoom < 12) this.zoom = 12;
-          this._draw();
-          this.notify(`[⚲] ${geocoded.display_name.slice(0, 60)}`);
-        } else {
-          this.notify(`No results for: ${result.query}`);
-          this._draw();
-        }
-      }
-    }
+    const zoom = place.zoom ?? (place.box ? zoomForBox(place.box, this.width, this.height, config.projectSize) : 12);
+    this.center = utils.normalize({ lat: place.lat, lon: place.lon });
+    // coordinates with a zoom and boxes go to that zoom; otherwise only closer
+    this.zoom = place.zoom !== undefined || place.box ? zoom : Math.max(this.zoom, zoom);
+    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
+    this.emit('move', this.getState());
+    this._draw();
+    this.notify(`[${place.kind === 'geohash' ? '#' : '⚲'}] ${label} (${place.lat.toFixed(4)}, ${place.lon.toFixed(4)})`);
   }
 
   // Handle help using HelpModal module

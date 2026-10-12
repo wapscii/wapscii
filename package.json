@@ -36,6 +36,7 @@
   "files": [
     "bin/mapscii.js",
     "dist/",
+    "tools/maps-search-index",
     "docs/*.md",
     "styles/*.json"
   ],

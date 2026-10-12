@@ -5,6 +5,7 @@
   Configuration module
 */
 
+import type { SearchProvider } from './search';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -87,6 +88,12 @@ export interface MapsciiConfig {
   enableLocation: boolean;
   // Disable text labels and POI markers for minimal rendering
   noLabels: boolean;
+  // Offline place index (tools/maps-search-index), asked while typing too
+  searchDatabase: string | null;
+  // Ask Nominatim when Enter is pressed
+  onlineSearch: boolean;
+  // Replaces both of them (library use)
+  searchProvider?: SearchProvider;
 }
 
 // Used unless the tile source names its own (in its TileJSON)
@@ -176,6 +183,9 @@ const config: MapsciiConfig = {
 
   // Labels and POI markers enabled by default
   noLabels: false,
+
+  searchDatabase: null,
+  onlineSearch: true,
 };
 
 export function createMapsciiConfig(overrides: Partial<MapsciiConfig> = {}): MapsciiConfig {

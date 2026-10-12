@@ -31,6 +31,7 @@ export default [
         Intl: 'readonly',
         URL: 'readonly',
         AbortSignal: 'readonly',
+        AbortController: 'readonly',
       },
     },
     plugins: {

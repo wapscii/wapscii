@@ -7,6 +7,7 @@
 */
 
 import config from './src/config';
+import { defaultSearchDatabase } from './src/search';
 import Mapscii from './src/Mapscii';
 import { MarkerInput, parseMarkersFromText } from './src/Markers';
 import yargs from 'yargs';
@@ -157,6 +158,17 @@ const argv = await yargs(hideBin(process.argv))
     description: 'Save the initial rendered canvas as an ANSI .ans file and exit',
     type: 'string',
   })
+  .option('searchDb', {
+    alias: 'search_db',
+    description: 'Offline place index made by tools/maps-search-index ' +
+      '[default: $MAPSCII_SEARCH_DB, or ~/.local/share/mapscii/search.sqlite if it exists]',
+    type: 'string',
+  })
+  .option('onlineSearch', {
+    description: 'Look place names up on Nominatim (OpenStreetMap) when Enter is pressed; --no-onlineSearch to stay offline',
+    type: 'boolean',
+    default: config.onlineSearch,
+  })
   .option('terrain', {
     description: 'Enable terrain/elevation hillshade background',
     type: 'boolean',
@@ -244,6 +256,9 @@ if (argv.cellRatio) {
   }
 }
 
+const searchDatabase = argv.searchDb || process.env.MAPSCII_SEARCH_DB ||
+  (fs.existsSync(defaultSearchDatabase()) ? defaultSearchDatabase() : null);
+
 const options = {
   initialLat: initialLat,
   initialLon: initialLon,
@@ -264,6 +279,8 @@ const options = {
     height: cellHeight,
   },
   noLabels: argv.noLabels,
+  searchDatabase,
+  onlineSearch: argv.onlineSearch,
   showAttribution: !argv.noAttribution,
   attribution: argv.attribution,
   ansiScreenshotFile: argv.ansiScreenshot,
