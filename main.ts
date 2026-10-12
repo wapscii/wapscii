@@ -137,6 +137,11 @@ const argv = await yargs(hideBin(process.argv))
     type: 'string',
     default: '2:4',
   })
+  .option('mouse', {
+    description: 'Use the mouse (drag, wheel, hover); --no-mouse leaves it to the terminal, for selecting text',
+    type: 'boolean',
+    default: config.useMouse,
+  })
   .option('noLabels', {
     alias: ['minimal', 'n'],
     description: 'Disable text labels and POI markers for minimal rendering',
@@ -279,6 +284,7 @@ const options = {
     height: cellHeight,
   },
   noLabels: argv.noLabels,
+  useMouse: argv.mouse,
   searchDatabase,
   onlineSearch: argv.onlineSearch,
   showAttribution: !argv.noAttribution,

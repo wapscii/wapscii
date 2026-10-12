@@ -88,6 +88,8 @@ export interface MapsciiConfig {
   enableLocation: boolean;
   // Disable text labels and POI markers for minimal rendering
   noLabels: boolean;
+  // Mouse reporting: drag, wheel zoom, hover (off leaves the mouse to the terminal)
+  useMouse: boolean;
   // Offline place index (tools/maps-search-index), asked while typing too
   searchDatabase: string | null;
   // Ask Nominatim when Enter is pressed
@@ -183,6 +185,8 @@ const config: MapsciiConfig = {
 
   // Labels and POI markers enabled by default
   noLabels: false,
+
+  useMouse: true,
 
   searchDatabase: null,
   onlineSearch: true,

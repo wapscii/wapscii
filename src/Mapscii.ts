@@ -57,6 +57,8 @@ export interface MapsciiOptions {
   markerInputs?: MarkerInput[];
   cellGeometry?: { width: number; height: number };
   noLabels?: boolean;
+  /** Mouse reporting (default true); false leaves the mouse to the terminal */
+  useMouse?: boolean;
   /** Offline place index made by tools/maps-search-index */
   searchDatabase?: string | null;
   /** Ask Nominatim (on Enter only) for place names */
@@ -310,7 +312,7 @@ export default class Mapscii {
           });
           break;
       }
-    });
+    }, { mouse: config.useMouse });
 
     // Cleanup on exit
     process.on('exit', () => {

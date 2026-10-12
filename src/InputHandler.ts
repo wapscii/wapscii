@@ -69,12 +69,13 @@ export default class InputHandler {
     // We use terminal-kit's terminal directly, ignoring passed streams
   }
 
-  start(callback: EventCallback): void {
+  start(callback: EventCallback, options: { mouse?: boolean } = {}): void {
     this.callback = callback;
     this.enabled = true;
 
-    // Enable mouse tracking with motion - exactly like test-mouse.ts
-    term.grabInput({ mouse: 'motion' });
+    // Mouse tracking with motion, unless the mouse should stay the terminal's
+    // (selecting text, scrolling back)
+    term.grabInput(options.mouse === false ? true : { mouse: 'motion' });
 
     // Create bound handlers so we can remove them later
     this.keyHandler = (name: string, _matches: string[], _data: KeyData) => {

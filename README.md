@@ -103,7 +103,7 @@ Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folde
 
 ## Mouse control
 
-If your terminal supports mouse events you can drag the map and use your scroll wheel to zoom in and out.
+If your terminal supports mouse events you can drag the map and use your scroll wheel to zoom in and out. `--no-mouse` leaves the mouse to the terminal, for selecting text and scrolling back.
 
 ## Library API
 
