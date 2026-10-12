@@ -42,6 +42,23 @@ type ResizeHandler = (width: number, height: number) => void;
 export { term };
 
 /**
+ * rxvt and urxvt send Shift+arrows as ESC [ a/b/c/d, which terminal-kit's
+ * rxvt key map lacks: Shift+Up came through as Escape, "[" and "a".
+ * Teach it those four (terminal-kit internals, so carefully).
+ */
+export function addRxvtShiftArrows(terminal: object = term): void {
+  const keys = terminal as { rKeymap?: Record<number, Record<string, unknown>> };
+  const threeBytes = keys.rKeymap?.[3];
+  if (!threeBytes) return;
+  const arrows: Record<string, string> = { a: 'SHIFT_UP', b: 'SHIFT_DOWN', c: 'SHIFT_RIGHT', d: 'SHIFT_LEFT' };
+  for (const [letter, name] of Object.entries(arrows)) {
+    const code = `\x1b[${letter}`;
+    if (!threeBytes[code]) threeBytes[code] = { code, name, matches: [name] };
+  }
+}
+addRxvtShiftArrows();
+
+/**
  * Map terminal-kit key names to our key names. Single printable characters
  * keep their case so uppercase bindings (e.g. S, R) can fire; consumers fall
  * back to the lowercase binding themselves (see Mapscii._onKey).

@@ -94,7 +94,7 @@ Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folde
 ## Keyboard shortcuts
 
 * Arrows **up**, **down**, **left**, **right** to scroll around
-* Press **a** or **z** to zoom in and out
+* Press **a** or **z** (**y** on QWERTZ), **+** or **-**, **Page Up** or **Page Down**, or **Shift+Up** or **Shift+Down** to zoom in and out
 * Press **/** or **s** to search: place names, `lat,lon[,zoom]` or a geohash (see [docs/search.md](./docs/search.md))
 * Press **c** to switch to block character mode
 * Press **S** to save the current canvas as an ANSI `.ans` screenshot

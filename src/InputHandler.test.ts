@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import InputHandler, { normalizeKeyName, term } from './InputHandler';
+import InputHandler, { addRxvtShiftArrows, normalizeKeyName, term } from './InputHandler';
 
 describe('normalizeKeyName', () => {
   test('keeps the case of single printable characters so uppercase bindings work', () => {
@@ -49,5 +49,16 @@ describe('InputHandler', () => {
       term.grabInput = original;
     }
     expect(grabbed).toEqual([{ mouse: 'motion' }, false, true, false]);
+  });
+});
+
+describe('terminal-kit key map', () => {
+  test('learns rxvt\'s Shift+arrows, without replacing known keys', () => {
+    const known = { code: '\x1b[c', name: 'SOMETHING', matches: ['SOMETHING'] };
+    const terminal = { rKeymap: { 3: { '\x1b[c': known } as Record<string, unknown> } };
+    addRxvtShiftArrows(terminal);
+    expect(terminal.rKeymap[3]['\x1b[a']).toEqual({ code: '\x1b[a', name: 'SHIFT_UP', matches: ['SHIFT_UP'] });
+    expect(terminal.rKeymap[3]['\x1b[b']).toMatchObject({ name: 'SHIFT_DOWN' });
+    expect(terminal.rKeymap[3]['\x1b[c']).toBe(known);
   });
 });

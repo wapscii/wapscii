@@ -594,11 +594,23 @@ export default class Mapscii {
           process.exit(0);
         }
         break;
+      // a/z (y on QWERTZ) sit far apart, and on AZERTY a is where q is on
+      // QWERTY, next to quit: +/- (= is + unshifted), Page Up/Down and
+      // Shift+Up/Down zoom too.
       case 'a':
+      case '+':
+      case '=':
+      case 'kp_plus':
+      case 'page_up':
+      case 'shift_up':
         this.zoomBy(config.zoomStep);
         break;
       case 'y':
       case 'z':
+      case '-':
+      case 'kp_minus':
+      case 'page_down':
+      case 'shift_down':
         this.zoomBy(-config.zoomStep);
         break;
       case 'left':
