@@ -29,6 +29,8 @@ export default [
         performance: 'readonly',
         NodeJS: 'readonly',
         Intl: 'readonly',
+        URL: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     plugins: {
@@ -44,6 +46,16 @@ export default [
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
+    // bun test: its HTTP server stands in for tile servers
+    files: ['**/*.test.ts'],
+    languageOptions: {
+      globals: {
+        Bun: 'readonly',
+        Response: 'readonly',
+      },
     },
   },
 ];

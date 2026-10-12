@@ -13,6 +13,7 @@ import { MarkerInput } from './Markers';
 import TileSource, { type TileCacheResetResult } from './TileSource';
 import * as utils from './utils';
 import config, {
+  DEFAULT_ATTRIBUTION,
   applyMapsciiConfig,
   createMapsciiConfig,
   type ColorMode,
@@ -259,15 +260,19 @@ export default class Mapscii {
     this._activateConfig();
     this.tileSource = new TileSource();
     await this.tileSource.init(config.source);
-    this.maxZoom = this.tileSource.getMaxZoom();
 
-    // A standalone .pbf/.mvt only provides the 0/0/0 tile: pin the base tile
-    // zoom to 0 so every zoom level overzooms (scales) that single tile
-    // instead of requesting tiles that don't exist.
-    if (this.tileSource.isSingleVectorTile()) {
-      this.instanceConfig.tileRange = 0;
-      this._activateConfig();
+    // Tiles are requested up to the source's own maximum zoom (14 for
+    // OpenMapTiles, 0 for a standalone .pbf/.mvt); deeper zoom levels scale
+    // those tiles instead of requesting tiles that don't exist.
+    this.instanceConfig.tileRange = Math.min(this.instanceConfig.tileRange, this.tileSource.getMaxZoom());
+    // A single tile gets blocky long before street level
+    this.maxZoom = this.tileSource.isSingleVectorTile() ? 8 : this.instanceConfig.maxZoom;
+
+    // The source's own attribution, unless one was asked for
+    if (this.tileSource.attribution && this.instanceConfig.attribution === DEFAULT_ATTRIBUTION) {
+      this.instanceConfig.attribution = this.tileSource.attribution;
     }
+    this._activateConfig();
   }
 
   private _initInput(): void {

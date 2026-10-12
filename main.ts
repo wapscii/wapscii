@@ -104,7 +104,7 @@ const argv = await yargs(hideBin(process.argv))
   })
   .option('tile_source', {
     alias: 'tileSource',
-    description: 'URL or path to osm2vectortiles source',
+    description: 'Vector tiles: a TileJSON URL, a {z}/{x}/{y} URL template, a base URL ending in /, an .mbtiles or a .pbf file',
     default: config.source,
     type: 'string',
   })

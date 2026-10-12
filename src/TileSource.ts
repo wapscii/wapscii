@@ -3,7 +3,8 @@
   by Michael Strassburger <codepoet@cpan.org>
 
   Source for VectorTiles - supports
-  * remote TileServer
+  * remote TileServer: a TileJSON URL, a {z}/{x}/{y} URL template, or a
+    base URL ending in / (tiles at base/z/x/y.pbf)
   * local MBTiles and VectorTiles
 */
 
@@ -36,6 +37,57 @@ function sharedCacheDirs(): string[] {
 export function sourceCacheDir(source: string): string {
   const id = createHash('sha256').update(source).digest('hex').slice(0, 16);
   return path.join(cacheRoot(), 'sources', id);
+}
+
+interface TileJSON {
+  tiles: string[];
+  minzoom?: number;
+  maxzoom?: number;
+  attribution?: string;
+}
+
+/** Whether an HTTP source is a URL template with {z}, {x} and {y} in it. */
+export function isTileUrlTemplate(source: string): boolean {
+  return source.includes('{z}') && source.includes('{x}') && (source.includes('{y}') || source.includes('{-y}'));
+}
+
+/** The URL of one tile: {z}/{x}/{y} replaced, {-y} for TMS servers. */
+export function tileUrl(template: string, z: number, x: number, y: number): string {
+  return template
+    .replaceAll('{z}', String(z))
+    .replaceAll('{x}', String(x))
+    .replaceAll('{-y}', String((1 << z) - 1 - y))
+    .replaceAll('{y}', String(y));
+}
+
+/** TileJSON attributions are HTML; the terminal gets their text. */
+export function attributionText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&copy;/g, '©')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    // eslint-disable-next-line no-control-regex -- terminal control characters
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseTileJSON(text: string, base: string): TileJSON {
+  const data: unknown = JSON.parse(text);
+  const json = data as Partial<TileJSON> | null;
+  if (!json || !Array.isArray(json.tiles) || typeof json.tiles[0] !== 'string') {
+    throw new Error('not a TileJSON: it has no "tiles" list');
+  }
+  return {
+    // tile URLs may be relative to the TileJSON's own
+    tiles: json.tiles.map((t) => new URL(t, base).toString().replace(/%7B/gi, '{').replace(/%7D/gi, '}')),
+    minzoom: typeof json.minzoom === 'number' ? json.minzoom : undefined,
+    maxzoom: typeof json.maxzoom === 'number' ? json.maxzoom : undefined,
+    attribution: typeof json.attribution === 'string' ? json.attribution : undefined,
+  };
 }
 
 export interface TileCacheResetResult {
@@ -97,6 +149,10 @@ export default class TileSource {
   public styler: Styler | null = null;
   public maxZoom: number | null = null;
   public cacheDir: string | null = null;
+  /** {z}/{x}/{y} template the tiles of an HTTP source are fetched from */
+  public tileUrlTemplate: string | null = null;
+  /** Attribution the source asks for (from its TileJSON), as text */
+  public attribution: string | null = null;
   // De-dupe concurrent requests for the same tile (the globe view requests
   // the same parent tile from many fallback paths simultaneously)
   private inflight: Map<string, Promise<Tile>> = new Map();
@@ -110,6 +166,9 @@ export default class TileSource {
     this.cached = [];
     this.vectorTilePath = null;
     this.cacheDir = null;
+    this.tileUrlTemplate = null;
+    this.attribution = null;
+    this.maxZoom = null;
 
     if (this.source.startsWith('http')) {
       this.cacheDir = sourceCacheDir(this.source);
@@ -118,7 +177,17 @@ export default class TileSource {
       }
 
       this.mode = TileMode.HTTP;
-      this.maxZoom = config.maxZoom;
+      if (isTileUrlTemplate(this.source)) {
+        this.tileUrlTemplate = this.source;
+      } else if (this.source.endsWith('/')) {
+        // mapscii's original form: base URL, tiles at base/z/x/y.pbf
+        this.tileUrlTemplate = this.source + '{z}/{x}/{y}.pbf';
+      } else {
+        const tileJSON = await this._loadTileJSON(this.source);
+        this.tileUrlTemplate = tileJSON.tiles[0];
+        this.maxZoom = tileJSON.maxzoom ?? null;
+        this.attribution = tileJSON.attribution ? attributionText(tileJSON.attribution) || null : null;
+      }
     } else if (this._isMBTilesSource(this.source)) {
       if (!MBTiles) {
         throw new Error('MBTiles support requires installing optional peer dependency @mapbox/mbtiles in this project.');
@@ -129,9 +198,9 @@ export default class TileSource {
     } else if (this._isVectorTileSource(this.source)) {
       this.mode = TileMode.VectorTile;
       this.vectorTilePath = this._sourceToLocalPath(source);
-      // The standalone tile is served as 0/0/0 and overzoomed: Mapscii sets
-      // tileRange to 0 for this mode so all zoom levels scale the same tile.
-      this.maxZoom = 8;
+      // The standalone tile is served as 0/0/0 and overzoomed: every zoom
+      // level scales the same tile.
+      this.maxZoom = 0;
     } else {
       throw new Error('source type isn\'t supported yet');
     }
@@ -154,11 +223,7 @@ export default class TileSource {
         this.mbtiles._db.all(
           'SELECT MAX(zoom_level) as max_zoom FROM tiles',
           (err: Error | null, rows: Array<{ max_zoom?: number }>) => {
-            if (err || !rows || !rows[0]) {
-              this.maxZoom = config.maxZoom;
-            } else {
-              this.maxZoom = rows[0].max_zoom ?? config.maxZoom;
-            }
+            this.maxZoom = err || !rows || !rows[0] ? null : rows[0].max_zoom ?? null;
             resolve();
           }
         );
@@ -170,8 +235,42 @@ export default class TileSource {
     this.styler = styler;
   }
 
+  /** The highest zoom level the source has tiles for (deeper zooms scale those). */
   getMaxZoom(): number {
-    return this.maxZoom ?? config.maxZoom;
+    return this.maxZoom ?? config.tileRange;
+  }
+
+  /**
+   * Reads a TileJSON (https://github.com/mapbox/tilejson-spec). OpenFreeMap's
+   * planet TileJSON points at a dated tile set that changes every week, so
+   * the source to configure is the TileJSON, not a tile URL. It is kept next
+   * to the cached tiles, so that those still show without a network.
+   */
+  private async _loadTileJSON(url: string): Promise<TileJSON> {
+    const saved = this.cacheDir ? path.join(this.cacheDir, 'tilejson.json') : null;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const text = await response.text();
+      const tileJSON = parseTileJSON(text, url);
+      if (saved && config.persistDownloadedTiles) {
+        fs.writeFile(saved, text, () => { /* ignore errors */ });
+      }
+      return tileJSON;
+    } catch (error: unknown) {
+      if (saved) {
+        try {
+          return parseTileJSON(fs.readFileSync(saved, 'utf8'), url);
+        } catch {
+          // nothing saved: report the download's error
+        }
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`cannot read the TileJSON at ${url} (${reason}). A tile URL template ` +
+        '(.../{z}/{x}/{y}.pbf) or a base URL ending in / can be given instead.');
+    }
   }
 
   isSingleVectorTile(): boolean {
@@ -300,7 +399,10 @@ export default class TileSource {
       }
     }
 
-    const response = await fetch(this.source + [z, x, y].join('/') + '.pbf');
+    if (!this.tileUrlTemplate) {
+      throw new Error('HTTP source not initialized');
+    }
+    const response = await fetch(tileUrl(this.tileUrlTemplate, z, x, y));
     if (!response.ok) {
       if (response.status === 404 || response.status === 410 || response.status === 204) {
         throw new TileNotFoundError(`tile not found: ${z}/${x}/${y} (HTTP ${response.status})`);

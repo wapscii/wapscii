@@ -80,6 +80,15 @@ mapscii --ansiScreenshot ./map.ans --width 120 --height 40
 mapscii --noAttribution
 ```
 
+`--tile_source` takes OpenMapTiles vector tiles from:
+
+* a TileJSON URL, like the default `https://tiles.openfreemap.org/planet` ([OpenFreeMap](https://openfreemap.org)); the source's attribution then replaces the default one
+* a URL template: `--tile_source 'http://localhost:8080/data/v3/{z}/{x}/{y}.pbf'` (`{-y}` for TMS servers)
+* a base URL ending in `/`, with the tiles at `base/z/x/y.pbf`
+* an `.mbtiles` file (with the optional `@mapbox/mbtiles` installed) or a single `.pbf`/`.mvt` tile
+
+Tiles are fetched up to the source's highest zoom level (14 for OpenMapTiles) and scaled beyond it.
+
 Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source.
 
 ## Keyboard shortcuts
@@ -108,7 +117,7 @@ const map = new Mapscii({
   initialLat: 48.8566,
   initialLon: 2.3522,
   initialZoom: 12,
-  source: 'https://tiles.openfreemap.org/planet/map/',
+  source: 'https://tiles.openfreemap.org/planet',
   styleFile: './styles/dark.json',
   colorMode: 'ansi-16',
   showAttribution: true,

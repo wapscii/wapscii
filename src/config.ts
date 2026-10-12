@@ -89,10 +89,14 @@ export interface MapsciiConfig {
   noLabels: boolean;
 }
 
+// Used unless the tile source names its own (in its TileJSON)
+export const DEFAULT_ATTRIBUTION = '(c) OpenStreetMap contributors';
+
 const config: MapsciiConfig = {
   language: 'en',
 
-  source: 'https://tiles.openfreemap.org/planet/map/',
+  // OpenFreeMap's TileJSON, which names the current tile set (OpenMapTiles)
+  source: 'https://tiles.openfreemap.org/planet',
 
   // Style file path - resolve from src directory
   styleFile: join(__dirname, '..', 'styles', 'dark.json'),
@@ -124,7 +128,7 @@ const config: MapsciiConfig = {
   labelMaxWidth: 24,
 
   showAttribution: true,
-  attribution: '(c) OpenStreetMap contributors',
+  attribution: DEFAULT_ATTRIBUTION,
   ansiScreenshotFile: null,
   exitAfterAnsiScreenshot: false,
 

@@ -16,7 +16,7 @@ const map = new Mapscii({
   initialLat: 48.8566,
   initialLon: 2.3522,
   initialZoom: 12,
-  source: 'https://tiles.openfreemap.org/planet/map/',
+  source: 'https://tiles.openfreemap.org/planet',
   styleFile: './styles/dark.json',
   colorMode: 'xterm-256',
 });
