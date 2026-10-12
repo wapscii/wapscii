@@ -80,7 +80,7 @@ mapscii --ansiScreenshot ./map.ans --width 120 --height 40
 mapscii --noAttribution
 ```
 
-Downloaded HTTP tiles are cached under `~/.cache/mapscii/cache-2` when persistence is enabled. Existing tiles from the legacy `~/.mapscii/cache-2` location are read and migrated lazily.
+Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source.
 
 ## Keyboard shortcuts
 

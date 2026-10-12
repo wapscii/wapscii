@@ -7,6 +7,7 @@
   * local MBTiles and VectorTiles
 */
 
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { homedir } from 'os';
@@ -17,9 +18,25 @@ import config from './config';
 import Styler from './Styler';
 import TileWorkerPool from './TileWorkerPool';
 
-const cacheRoot = process.env.XDG_CACHE_HOME || path.join(homedir(), '.cache');
-const cacheDir = path.join(cacheRoot, 'mapscii', 'cache-2');
-const legacyCacheDir = path.join(homedir(), '.mapscii', 'cache-2');
+function cacheRoot(): string {
+  return path.join(process.env.XDG_CACHE_HOME || path.join(homedir(), '.cache'), 'mapscii');
+}
+
+// Before each source had its own folder, the tiles of every source went into
+// one of these: they are only ever deleted (by resetCache), never read.
+function sharedCacheDirs(): string[] {
+  return [path.join(cacheRoot(), 'cache-2'), path.join(homedir(), '.mapscii', 'cache-2')];
+}
+
+/**
+ * Where the tiles of an HTTP source are kept. Each source gets its own folder,
+ * so tiles of different servers (and of different schemas: OpenMapTiles,
+ * the old mapscii.me tiles, a local tileserver) never mix.
+ */
+export function sourceCacheDir(source: string): string {
+  const id = createHash('sha256').update(source).digest('hex').slice(0, 16);
+  return path.join(cacheRoot(), 'sources', id);
+}
 
 export interface TileCacheResetResult {
   memoryEntries: number;
@@ -79,6 +96,7 @@ export default class TileSource {
   public vectorTilePath: string | null = null;
   public styler: Styler | null = null;
   public maxZoom: number | null = null;
+  public cacheDir: string | null = null;
   // De-dupe concurrent requests for the same tile (the globe view requests
   // the same parent tile from many fallback paths simultaneously)
   private inflight: Map<string, Promise<Tile>> = new Map();
@@ -91,8 +109,10 @@ export default class TileSource {
     this.cache = {};
     this.cached = [];
     this.vectorTilePath = null;
+    this.cacheDir = null;
 
     if (this.source.startsWith('http')) {
+      this.cacheDir = sourceCacheDir(this.source);
       if (config.persistDownloadedTiles) {
         this._initPersistence();
       }
@@ -224,7 +244,7 @@ export default class TileSource {
     };
 
     if (options.persistent !== false) {
-      [cacheDir, legacyCacheDir].forEach((folder) => {
+      [...(this.cacheDir ? [this.cacheDir] : []), ...sharedCacheDirs()].forEach((folder) => {
         try {
           if (fs.existsSync(folder)) {
             fs.rmSync(folder, { recursive: true, force: true });
@@ -341,44 +361,49 @@ export default class TileSource {
   }
 
   private _initPersistence(): void {
+    if (!this.cacheDir) return;
     try {
-      this._createFolder(cacheDir);
+      this._createFolder(this.cacheDir);
+      // which source the folder belongs to, for whoever looks into the cache
+      fs.writeFileSync(path.join(this.cacheDir, 'source.txt'), this.source + '\n');
     } catch {
       config.persistDownloadedTiles = false;
     }
   }
 
+  private _tilePath(z: number, x: number, y: number): string | null {
+    return this.cacheDir && path.join(this.cacheDir, z.toString(), `${x}-${y}.pbf`);
+  }
+
   private _persistTile(z: number, x: number, y: number, buffer: Buffer): void {
-    const zoom = z.toString();
-    this._createFolder(path.join(cacheDir, zoom));
-    const filePath = path.join(cacheDir, zoom, `${x}-${y}.pbf`);
+    const filePath = this._tilePath(z, x, y);
+    if (!filePath) return;
+    try {
+      this._createFolder(path.dirname(filePath));
+    } catch {
+      return;
+    }
     fs.writeFile(filePath, buffer, () => { /* ignore errors */ });
   }
 
   private _getPersisted(z: number, x: number, y: number): Buffer | false {
-    const relativePath = path.join(z.toString(), `${x}-${y}.pbf`);
-
+    const filePath = this._tilePath(z, x, y);
+    if (!filePath) return false;
     try {
-      return fs.readFileSync(path.join(cacheDir, relativePath));
+      return fs.readFileSync(filePath);
     } catch {
-      try {
-        const buffer = fs.readFileSync(path.join(legacyCacheDir, relativePath));
-        this._persistTile(z, x, y, buffer);
-        return buffer;
-      } catch {
-        return false;
-      }
+      return false;
     }
   }
 
   private _deletePersisted(z: number, x: number, y: number): void {
-    [cacheDir, legacyCacheDir].forEach((folder) => {
-      try {
-        fs.unlinkSync(path.join(folder, z.toString(), `${x}-${y}.pbf`));
-      } catch {
-        // ignore
-      }
-    });
+    const filePath = this._tilePath(z, x, y);
+    if (!filePath) return;
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // ignore
+    }
   }
 
   private _createFolder(folderPath: string): boolean {
