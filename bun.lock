@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "mapscii",
+      "name": "wapscii",
       "dependencies": {
         "@mapbox/vector-tile": "^2.0.4",
         "arabic-persian-reshaper": "^1.0.1",

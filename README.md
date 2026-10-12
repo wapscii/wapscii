@@ -1,68 +1,52 @@
-# MapSCII - The Whole World In Your Console. [![Build Status](https://travis-ci.com/rastapasta/mapscii.svg?branch=master)](https://travis-ci.com/rastapasta/mapscii)
+# wapscii - The Whole World In Your Console. [![CI](https://github.com/wapscii/wapscii/actions/workflows/ci.yml/badge.svg)](https://github.com/wapscii/wapscii/actions/workflows/ci.yml)
 
-A node.js based [Vector Tile](http://wiki.openstreetmap.org/wiki/Vector_tiles) to [Braille](http://www.fileformat.info/info/unicode/block/braille_patterns/utf8test.htm) and [ASCII](https://de.wikipedia.org/wiki/American_Standard_Code_for_Information_Interchange) renderer for [xterm](https://en.wikipedia.org/wiki/Xterm)-compatible terminals.
+A [Vector Tile](http://wiki.openstreetmap.org/wiki/Vector_tiles) to [Braille](http://www.fileformat.info/info/unicode/block/braille_patterns/utf8test.htm) and [ASCII](https://de.wikipedia.org/wiki/American_Standard_Code_for_Information_Interchange) map renderer for [xterm](https://en.wikipedia.org/wiki/Xterm)-compatible terminals.
+
+wapscii is [MapSCII](https://github.com/rastapasta/mapscii), maintained again. MapSCII's tile server (OSM2VectorTiles, long discontinued) and its pull requests had been standing still; wapscii carries on from them: [OpenMapTiles](https://openmaptiles.org) vector tiles from [OpenFreeMap](https://openfreemap.org) by default, TypeScript, a 3D globe, search, and the fixes collected in the pull requests. The command is still `mapscii`.
 
 <a href="https://asciinema.org/a/117813?autoplay=1" target="_blank">![asciicast](https://cloud.githubusercontent.com/assets/1259904/25480718/497a64e2-2b4a-11e7-9cf0-ed52ee0b89c0.png)</a>
 
-## Try it out!
-
-```sh
-$ telnet mapscii.me
-```
-
-If you're on Windows, use the open source telnet client [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) to connect.
-
 ## Features
 
-* Use your mouse to drag and zoom in and out!
-* Discover Point-of-Interests around any given location
-* Highly customizable layer styling with [Mapbox Styles](https://www.mapbox.com/mapbox-gl-style-spec/) support
-* Connect to any public or private vector tile server
-* Or just use the supplied and optimized [OSM2VectorTiles](https://github.com/osm2vectortiles) based one
-* Work offline and discover local [VectorTile](https://github.com/mapbox/vector-tile-spec)/[MBTiles](https://github.com/mapbox/mbtiles-spec)
-* Render standalone `.pbf` / `.mvt` vector tiles directly
-* Hover labels, POIs, lines and polygons from mouse-enabled terminals
+* Drag the map and zoom with the mouse, or use the keyboard
+* Search places by name (offline, or on OpenStreetMap's Nominatim), coordinates and geohashes
+* A 3D globe view
+* Points of interest, airports and peaks; hover labels, POIs, lines and polygons
+* [Mapbox style](https://docs.mapbox.com/style-spec/) layer styling
+* Any OpenMapTiles vector tile source: OpenFreeMap by default, your own tileserver ([TileJSON](https://github.com/mapbox/tilejson-spec) or `{z}/{x}/{y}` URLs), [MBTiles](https://github.com/mapbox/mbtiles-spec) and single `.pbf`/`.mvt` tiles offline
 * Multi-line and Arabic/right-to-left labels
-* Optional ANSI 16-color output for low-color terminals
-* Optional terrain/elevation hillshade background
-* Persistent OpenStreetMap attribution in the rendered frame
-* Compatible with most Linux and OSX terminals
-* Highly optimized algorithms for a smooth experience
-* 100% pure JavaScript! :sunglasses:
+* ANSI 16-color output for low-color terminals, and `.ans` screenshots
+* Terrain/elevation hillshade background
+* Markers from the command line, GeoJSON or stdin
+* A library API to embed the map in other programs
+* Linux, macOS and Windows terminals
 
-## How to run it locally
+## Install
 
-With a modern node installation available, just start it with
+wapscii needs [Node.js](https://nodejs.org) 18 or newer.
 
-```
-npx mapscii
-```
+From npm:
 
-## How to install it locally
-
-### With npm
-
-If you haven't already got Node.js >= version 10, then [go get it](http://nodejs.org/).
-
-```
-npm install -g mapscii
+```sh
+npm install -g wapscii
+mapscii
 ```
 
-If you're on OSX, or get an error about file permissions, you may need to do ```sudo npm install -g mapscii```
+From the source ([Bun](https://bun.sh) builds it):
 
-### With snap
+```sh
+git clone https://github.com/wapscii/wapscii.git
+cd wapscii
+bun install
+bun run build
+node bin/mapscii.js
+```
 
-In any of the [supported Linux distros](https://snapcraft.io/docs/core/install):
-
-    sudo snap install mapscii
-    
-(This snap is maintained by [@nathanhaines](https://github.com/nathanhaines/))
+The original MapSCII is also still around as a demo: `telnet mapscii.me`.
 
 ## Running
 
-This is pretty simple too.
-
-```
+```sh
 mapscii
 ```
 
@@ -78,7 +62,15 @@ mapscii --terrain --terrainMode hillshade
 mapscii --terrainSource "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 mapscii --ansiScreenshot ./map.ans --width 120 --height 40
 mapscii --noAttribution
+mapscii --latitude 48.137 --longitude 11.575 --zoom 13
+mapscii --locate                         # start where your IP address is
+mapscii --marker 48.137,11.575 --geojson ./places.geojson
+mapscii --searchDb ./search.sqlite       # offline place search, see docs/search.md
+mapscii --no-onlineSearch                # never send searches to Nominatim
+mapscii --no-mouse                       # leave the mouse to the terminal
 ```
+
+`mapscii --help` lists them all.
 
 `--tile_source` takes OpenMapTiles vector tiles from:
 
@@ -96,9 +88,14 @@ Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folde
 * Arrows **up**, **down**, **left**, **right** to scroll around
 * Press **a** or **z** (**y** on QWERTZ), **+** or **-**, **Page Up** or **Page Down**, or **Shift+Up** or **Shift+Down** to zoom in and out
 * Press **/** or **s** to search: place names, `lat,lon[,zoom]` or a geohash (see [docs/search.md](./docs/search.md))
+* Press **g** to go to your approximate location (your IP address's, from [ipinfo.io](https://ipinfo.io))
+* Press **o** for the 3D globe
 * Press **c** to switch to block character mode
+* Press **t** to hide or show labels
+* Press **m** to remove the markers
 * Press **S** to save the current canvas as an ANSI `.ans` screenshot
 * Press **R** to reset the tile cache if cached tiles become corrupted
+* Press **?** for help
 * Press **q** to quit
 
 ## Mouse control
@@ -109,10 +106,10 @@ If your terminal supports mouse events you can drag the map and use your scroll 
 
 See the full [library API documentation](./docs/library-api.md).
 
-MapSCII can also be embedded from Node.js:
+wapscii can also be embedded from Node.js:
 
 ```js
-import Mapscii from 'mapscii';
+import Mapscii from 'wapscii';
 
 const map = new Mapscii({
   initialLat: 48.8566,
@@ -156,59 +153,41 @@ Events:
 * `marker:add`, `marker:remove`, `markers:clear`
 * `error`
 
+## Development
+
+```sh
+bun install
+bun run typecheck
+bun test
+bun run lint
+python3 tools/test_maps_search_index.py
+bun main.ts --tile_source http://localhost:8080/data/v3.json        # run from the sources
+```
+
+`docs/openmaptiles-migration.md` has the notes on moving the styles from OSM2VectorTiles to OpenMapTiles.
+
 ## Behind the scenes
-### Libraries
-#### Mastering the console
-  * [`x256`](https://github.com/substack/node-x256) for converting RGB values to closest xterm-256 [color code](https://en.wikipedia.org/wiki/File:Xterm_256color_chart.svg)
-  * [`term-mouse`](https://github.com/CoderPuppy/term-mouse) for mouse handling
-  * [`keypress`](https://github.com/TooTallNate/keypress) for input handling
-  * [`string-width`](https://github.com/sindresorhus/string-width) to determine visual string lengths
 
-#### Discovering the map data
-* [`vector-tile`](https://github.com/mapbox/vector-tile-js) for [VectorTile](https://github.com/mapbox/vector-tile-spec/tree/master/2.1) parsing
-* [`pbf`](https://github.com/mapbox/pbf) for [Protobuf](https://developers.google.com/protocol-buffers/) decoding
-* [`mbtiles`](https://github.com/mapbox/node-mbtiles) for [MBTiles](https://github.com/mapbox/mbtiles-spec/blob/master/1.2/spec.md) parsing
-
-#### Juggling the vectors and numbers
+* [`terminal-kit`](https://github.com/cronvel/terminal-kit) for keyboard, mouse and terminal handling
+* [`x256`](https://github.com/substack/node-x256) for the closest xterm-256 [color code](https://en.wikipedia.org/wiki/File:Xterm_256color_chart.svg) of an RGB value
+* [`string-width`](https://github.com/sindresorhus/string-width) for the width of text in terminal cells
+* [`bidi-js`](https://github.com/lojjic/bidi-js) and [`arabic-persian-reshaper`](https://github.com/ahmadfarhan/arabic-persian-reshaper) for right-to-left labels
+* [`vector-tile`](https://github.com/mapbox/vector-tile-js) and [`pbf`](https://github.com/mapbox/pbf) for [vector tiles](https://github.com/mapbox/vector-tile-spec)
+* [`mbtiles`](https://github.com/mapbox/node-mbtiles) (optional) for [MBTiles](https://github.com/mapbox/mbtiles-spec)
 * [`earcut`](https://github.com/mapbox/earcut) for polygon triangulation
 * [`rbush`](https://github.com/mourner/rbush) for 2D spatial indexing of geo and label data
 * [`bresenham`](https://github.com/madbence/node-bresenham) for line point calculations
 * [`simplify-js`](https://github.com/mourner/simplify-js) for polyline simplifications
-
-#### Handling the flow
-* [`node-fetch`](https://github.com/bitinn/node-fetch) for HTTP requests
-* [`env-paths`](https://github.com/sindresorhus/env-paths) to determine where to persist downloaded tiles
-
-### TODOs
-* MapSCII
-  * [ ] GeoJSON support via [geojson-vt](https://github.com/mapbox/geojson-vt)
-  * [ ] CLI support
-    * [-] startup parameters
-      * [X] TileSource
-      * [X] Style
-      * [X] center position
-      * [X] zoom
-      * [ ] demo mode?
-
-  * [x] mouse control
-    * [x] hover POIs/labels
-    * [x] hover maybe even polygons/-lines?
-
-* Styler
-  * [x] respect zoom based style ranges
-
-* Renderer
-  * [x] download and process tiles in a different thread ([#3](https://github.com/rastapasta/mapscii/issues/3))
-  * [ ] optimize renderer for large areas ([#6](https://github.com/rastapasta/mapscii/issues/6))
-  * [ ] label drawing
-    * [x] multi line label?
-
-* TileSource
-  * [x] implement single vector-tile handling
+* [`ngeohash`](https://github.com/sunng87/node-geohash) for geohashes
+* [`pngjs`](https://github.com/pngjs/pngjs) for terrain tiles
+* [`yargs`](https://github.com/yargs/yargs) for the command line
 
 ## Special thanks
 
-* [lukasmartinelli](https://github.com/lukasmartinelli) & [manuelroth](https://github.com/manuelroth) for all their work on [OSM2VectorTiles](https://github.com/osm2vectortiles) (global vector tiles from [OSM Planet](https://wiki.openstreetmap.org/wiki/Planet.osm))
+* [rastapasta](https://github.com/rastapasta) (Michael Straßburger) for MapSCII, and everyone in [AUTHORS](./AUTHORS)
+* [ionmeo](https://github.com/ionmeo) for moving the styles to OpenMapTiles, and [Fefedu973](https://github.com/Fefedu973) for the TypeScript version, the globe and much more
+* [lukasmartinelli](https://github.com/lukasmartinelli) & [manuelroth](https://github.com/manuelroth) for all their work on [OSM2VectorTiles](https://github.com/osm2vectortiles), MapSCII's first tiles
+* [OpenMapTiles](https://openmaptiles.org) for the schema, and [OpenFreeMap](https://openfreemap.org) for hosting tiles for everyone
 * [mourner](https://github.com/mourner) for all his work on mindblowing GIS algorithms (like the used [earcut](https://github.com/mapbox/earcut), [rbush](https://github.com/mourner/rbush), [simplify-js](https://github.com/mourner/simplify-js), ..)
 
 ## Licenses
@@ -221,8 +200,8 @@ Events:
 
 You are free to copy, distribute, transmit and adapt our data, as long as you credit OpenStreetMap and its contributors. If you alter or build upon our data, you may distribute the result only under the same licence. The full [legal code](http://opendatacommons.org/licenses/odbl/1.0/) explains your rights and responsibilities.
 
-The cartography in our map tiles, and our documentation, are licenced under the [Creative Commons Attribution-ShareAlike 2.0](http://creativecommons.org/licenses/by-sa/2.0/) licence (CC BY-SA).
+The default tiles come from [OpenFreeMap](https://openfreemap.org), in the [OpenMapTiles](https://openmaptiles.org) schema (© OpenMapTiles). The offline search index is made from [GeoNames](https://www.geonames.org) data, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-### MapSCII
+### wapscii
 * [License](./LICENSE)
 * [Authors](./AUTHORS)

@@ -1,7 +1,7 @@
 {
-  "name": "mapscii",
+  "name": "wapscii",
   "version": "0.5.0",
-  "description": "MapSCII is a Braille & ASCII world map renderer for your console, based on OpenStreetMap",
+  "description": "The whole world in your console: a Braille & ASCII map renderer for OpenStreetMap vector tiles (MapSCII, maintained)",
   "type": "module",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,16 +28,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rastapasta/mapscii.git"
+    "url": "git+https://github.com/wapscii/wapscii.git"
   },
+  "homepage": "https://github.com/wapscii/wapscii",
+  "bugs": "https://github.com/wapscii/wapscii/issues",
   "bin": {
-    "mapscii": "./bin/mapscii.js"
+    "mapscii": "./bin/mapscii.js",
+    "wapscii": "./bin/mapscii.js"
   },
   "files": [
     "bin/mapscii.js",
     "dist/",
     "tools/maps-search-index",
-    "docs/*.md",
+    "docs/library-api.md",
+    "docs/search.md",
     "styles/*.json"
   ],
   "engines": {
@@ -50,7 +54,9 @@
     "ascii",
     "osm",
     "vectortile",
-    "mbtiles"
+    "mbtiles",
+    "openmaptiles",
+    "mapscii"
   ],
   "author": "Michael Straßburger <codepoet@cpan.org>",
   "license": "MIT",

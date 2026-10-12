@@ -1,6 +1,6 @@
 # Library API
 
-MapSCII can be used as a Node.js library as well as a CLI.
+wapscii can be used as a Node.js library as well as a CLI.
 
 Each `Mapscii` instance stores its own option snapshot, so constructing a
 second instance does not overwrite the first instance's options. Interactive
@@ -10,7 +10,7 @@ only one interactive terminal instance should be active at a time. Use
 streams.
 
 ```js
-import Mapscii from 'mapscii';
+import Mapscii from 'wapscii';
 
 const map = new Mapscii({
   initialLat: 48.8566,
@@ -41,7 +41,7 @@ await map.init();
 | `initialLat` / `initialLon` | `number` | Initial map center. |
 | `initialZoom` | `number \| null` | Initial zoom. `null` uses the calculated minimum zoom. |
 | `size` | `{ width?: number; height?: number }` | Fixed terminal-cell render size. |
-| `source` | `string` | HTTP tile URL prefix, `.mbtiles`, `.pbf`, or `.mvt` source. |
+| `source` | `string` | TileJSON URL, `{z}/{x}/{y}` tile URL template, base URL ending in `/`, `.mbtiles`, `.pbf`, or `.mvt` source. |
 | `styleFile` | `string` | Mapbox-style JSON file path. |
 | `useBraille` | `boolean` | Use Braille rendering instead of block ASCII fallback. |
 | `colorMode` | `'xterm-256' \| 'ansi-16'` | Terminal color palette. |
@@ -55,6 +55,10 @@ await map.init();
 | `cellGeometry` | `{ width: number; height: number }` | Terminal cell aspect-ratio correction. |
 | `noLabels` | `boolean` | Hide labels and POI markers. |
 | `headless` | `boolean` | Disable interactive terminal input/output behavior. |
+| `useMouse` | `boolean` | Mouse reporting (default `true`); `false` leaves the mouse to the terminal. |
+| `searchDatabase` | `string \| null` | Offline place index for search (see [search.md](./search.md)). |
+| `onlineSearch` | `boolean` | Ask Nominatim on Enter when the index has nothing (default `true`). |
+| `searchProvider` | `SearchProvider` | Your own place search, used instead of both. |
 
 ## Methods
 
@@ -71,7 +75,7 @@ await map.init();
 | `removeMarker(id)` | Removes a marker by id. |
 | `clearMarkers()` | Removes all markers. |
 | `getMarkers()` | Returns current markers. |
-| `resetTileCache()` | Clears in-memory tile cache plus persisted HTTP tile caches, then redraws. |
+| `resetTileCache()` | Clears the in-memory tile cache and the current HTTP source's persisted tiles, then redraws. |
 | `exportAnsiScreenshot(filePath?)` | Saves the current canvas as ANSI terminal output and returns the absolute path. |
 | `featuresAt(column, row)` | Returns labels, POIs, lines, and polygons under a terminal-cell coordinate. |
 | `getState()` | Returns `{ center, zoom, markers }`. |
