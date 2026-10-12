@@ -2,8 +2,9 @@
   MapSCII - Terminal Map Viewer
   Geolocation Module
 
-  Uses @derhuerst/location for WiFi-based geolocation
-  Falls back to IP-based geolocation via ipinfo.io
+  Where you are, roughly: the location of your IP address, from ipinfo.io.
+  That service sees your IP address (as every server you connect to does),
+  and nothing else is sent.
 */
 
 export interface GeoPosition {
@@ -13,69 +14,27 @@ export interface GeoPosition {
     source: string;
 }
 
-/**
- * Get current location using WiFi triangulation
- * Falls back to IP-based geolocation
- */
-export async function getCurrentLocation(): Promise<GeoPosition> {
-  // Try WiFi-based location first (uses @derhuerst/location)
-  try {
-    const location = await getWiFiLocation();
-    if (location) return location;
-  } catch {
-    // WiFi location failed, fall through to IP
-  }
-
-  // Fallback to IP-based geolocation
-  return await getIPLocation();
+interface IPInfo {
+  loc?: string;
+  city?: string;
+  country?: string;
 }
 
-/**
- * WiFi-based geolocation using @derhuerst/location
- * This uses wifi-triangulate internally
- */
-async function getWiFiLocation(): Promise<GeoPosition | null> {
+/** Your approximate location (the city of your IP address). */
+export async function getCurrentLocation(fetchImpl: typeof fetch = fetch): Promise<GeoPosition> {
+  let data: IPInfo;
   try {
-    const queryLocation = (await import('@derhuerst/location')).default;
-
-    const location = await Promise.race([
-      queryLocation(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)) // 10s timeout
-    ]);
-
-    if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
-      return {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        source: `WiFi${location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ''}`,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fallback: IP-based geolocation using ipinfo.io
- */
-async function getIPLocation(): Promise<GeoPosition> {
-  try {
-    const response = await fetch('https://ipinfo.io/json');
-    const data = await response.json() as { loc?: string; city?: string; country?: string };
-
-    if (data.loc) {
-      const [lat, lon] = data.loc.split(',').map(Number);
-      return {
-        latitude: lat,
-        longitude: lon,
-        source: `IP (${[data.city, data.country].filter(Boolean).join(', ') || 'Unknown'})`,
-      };
-    }
-
-    throw new Error('No location data in response');
+    const response = await fetchImpl('https://ipinfo.io/json', { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    data = await response.json() as IPInfo;
   } catch (error) {
-    throw new Error(`Location unavailable: ${error}`);
+    throw new Error(`Location unavailable: ${error instanceof Error ? error.message : error}`);
   }
+
+  const [latitude, longitude] = (data.loc ?? '').split(',').map(Number);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    throw new Error('Location unavailable: no location in the answer');
+  }
+  const place = [data.city, data.country].filter(Boolean).join(', ').replace(/[^\p{L}\p{N} ,.'-]/gu, '');
+  return { latitude, longitude, source: `IP (${place || 'unknown'})` };
 }

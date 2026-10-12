@@ -55,7 +55,6 @@
   "author": "Michael Straßburger <codepoet@cpan.org>",
   "license": "MIT",
   "dependencies": {
-    "@derhuerst/location": "^1.0.0",
     "@mapbox/vector-tile": "^2.0.4",
     "arabic-persian-reshaper": "^1.0.1",
     "bidi-js": "^1.0.3",
@@ -70,9 +69,6 @@
     "terminal-kit": "^3.1.2",
     "x256": "^0.0.2",
     "yargs": "^18.0.0"
-  },
-  "optionalDependencies": {
-    "wifi-triangulate": "^1.1.2"
   },
   "peerDependencies": {
     "@mapbox/mbtiles": "^0.12.1"

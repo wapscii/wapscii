@@ -1,25 +1,5 @@
 // Type declarations for modules without TypeScript definitions
 
-declare module '@derhuerst/location' {
-  interface Location {
-    latitude: number;
-    longitude: number;
-    accuracy?: number;
-  }
-  function queryLocation(): Promise<Location>;
-  export default queryLocation;
-}
-declare module 'wifi-triangulate' {
-  interface Location {
-    lat: number;
-    lng: number;
-    accuracy?: number;
-  }
-  type Callback = (err: Error | null, location: Location | null) => void;
-  function triangulate(callback: Callback): void;
-  export default triangulate;
-}
-
 declare module 'x256' {
   function x256(rgb: [number, number, number]): number;
   export default x256;

@@ -8,6 +8,7 @@
 
 import config from './src/config';
 import { defaultSearchDatabase } from './src/search';
+import { getCurrentLocation } from './src/Geolocation';
 import Mapscii from './src/Mapscii';
 import { MarkerInput, parseMarkersFromText } from './src/Markers';
 import yargs from 'yargs';
@@ -127,7 +128,7 @@ const argv = await yargs(hideBin(process.argv))
   })
   .option('locate', {
     alias: 'l',
-    description: 'Center map on current location (via IP geolocation)',
+    description: 'Center the map on your approximate location (your IP address\'s, from ipinfo.io)',
     type: 'boolean',
     default: false,
   })
@@ -235,16 +236,11 @@ let locationSource = '';
 
 if (argv.locate) {
   try {
-    // Use ipinfo.io for free IP geolocation
-    const response = await fetch('https://ipinfo.io/json');
-    const data = await response.json() as { loc?: string; city?: string; country?: string };
-    if (data.loc) {
-      const [lat, lon] = data.loc.split(',').map(Number);
-      initialLat = lat;
-      initialLon = lon;
-      locateOnStart = true;
-      locationSource = `IP (${[data.city, data.country].filter(Boolean).join(', ') || 'Unknown'})`;
-    }
+    const location = await getCurrentLocation();
+    initialLat = location.latitude;
+    initialLon = location.longitude;
+    locateOnStart = true;
+    locationSource = location.source;
   } catch {
     console.error('Failed to get current location, using default');
   }

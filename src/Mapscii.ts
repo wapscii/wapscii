@@ -908,7 +908,7 @@ export default class Mapscii {
     this._draw();
   }
 
-  // Go to current location - uses @derhuerst/location with IP fallback
+  // Go to your approximate location (your IP address's, see Geolocation.ts)
   private async _gotoCurrentLocation(): Promise<void> {
     this._activateConfig();
     this.notify('Getting location...');
