@@ -1,6 +1,9 @@
 import bidiFactory from 'bidi-js';
-import { ArabicShaper } from 'arabic-persian-reshaper';
+// CommonJS packages: Node's ESM loader only gives them a default export
+import arabicPersianReshaper from 'arabic-persian-reshaper';
 import stringWidth from 'string-width';
+
+const { ArabicShaper } = arabicPersianReshaper;
 
 const bidi = bidiFactory();
 const RTL_RE = /[\u0590-\u08ff\ufb1d-\ufefc]/;

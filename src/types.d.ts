@@ -49,6 +49,8 @@ declare module 'arabic-persian-reshaper' {
     convertPersian(text: string): string;
     convertPersianBack(text: string): string;
   };
+  const reshaper: { ArabicShaper: typeof ArabicShaper; PersianShaper: typeof PersianShaper };
+  export default reshaper;
 }
 
 declare module 'pngjs' {
@@ -165,7 +167,7 @@ declare module '@mapbox/mbtiles' {
 }
 
 declare module 'terminal-kit' {
-  interface Terminal {
+  export interface Terminal {
     width: number;
     height: number;
     grabInput(options: { mouse: string } | boolean): void;
@@ -198,13 +200,13 @@ declare module 'terminal-kit' {
     (text: string): Terminal;
   }
 
-  interface KeyData {
+  export interface KeyData {
     isCharacter: boolean;
     codepoint?: number;
     code?: Buffer;
   }
 
-  interface MouseData {
+  export interface MouseData {
     x: number;
     y: number;
     left?: boolean;
@@ -217,4 +219,6 @@ declare module 'terminal-kit' {
 
   const terminal: Terminal;
   export { terminal };
+  const terminalKit: { terminal: Terminal };
+  export default terminalKit;
 }

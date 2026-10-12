@@ -5,7 +5,10 @@
   Supports keyboard, mouse, and scroll events on all platforms including Windows Terminal
 */
 
-import { terminal as term } from 'terminal-kit';
+// CommonJS: Node's ESM loader only gives it a default export
+import terminalKit from 'terminal-kit';
+
+const term = terminalKit.terminal;
 
 export interface InputEvent {
   type: 'key' | 'mouse' | 'scroll' | 'resize';

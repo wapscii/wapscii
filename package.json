@@ -20,7 +20,7 @@
     "lint": "bun x eslint src main.ts",
     "test": "bun test",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build:js": "bun build main.ts index.ts --outdir ./dist --target node",
+    "build:js": "bun build main.ts index.ts --outdir ./dist --target node --packages external",
     "build:types": "bun x tsc -p tsconfig.declarations.json",
     "build": "bun run clean && bun run build:js && bun run build:types",
     "prepack": "bun run build",
@@ -83,6 +83,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "@types/rbush": "^4.0.0",
+    "@types/yargs": "^17.0.35",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "bun-types": "^1.1.0",
