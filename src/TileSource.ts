@@ -90,6 +90,28 @@ function parseTileJSON(text: string, base: string): TileJSON {
   };
 }
 
+/**
+ * Writes a file without ever leaving a part of it: the data goes to a
+ * temporary file that is renamed when complete. mapscii often exits (q,
+ * --ansiScreenshot) right after tiles arrive, and the background
+ * fs.writeFile used before then left empty .pbf files, which are valid
+ * empty tiles: the map stayed blank there until the cache was reset. A tile
+ * is a few kilobytes, so writing it synchronously costs nothing noticeable.
+ */
+function writeFileAtomic(file: string, data: string | Buffer): void {
+  const temporary = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporary, data);
+    fs.renameSync(temporary, file);
+  } catch {
+    try {
+      fs.unlinkSync(temporary);
+    } catch {
+      // nothing written
+    }
+  }
+}
+
 export interface TileCacheResetResult {
   memoryEntries: number;
   persistentPaths: string[];
@@ -256,7 +278,7 @@ export default class TileSource {
       const text = await response.text();
       const tileJSON = parseTileJSON(text, url);
       if (saved && config.persistDownloadedTiles) {
-        fs.writeFile(saved, text, () => { /* ignore errors */ });
+        writeFileAtomic(saved, text);
       }
       return tileJSON;
     } catch (error: unknown) {
@@ -485,14 +507,16 @@ export default class TileSource {
     } catch {
       return;
     }
-    fs.writeFile(filePath, buffer, () => { /* ignore errors */ });
+    writeFileAtomic(filePath, buffer);
   }
 
   private _getPersisted(z: number, x: number, y: number): Buffer | false {
     const filePath = this._tilePath(z, x, y);
     if (!filePath) return false;
     try {
-      return fs.readFileSync(filePath);
+      const buffer = fs.readFileSync(filePath);
+      // empty: cut short by an older version (see writeFileAtomic)
+      return buffer.length ? buffer : false;
     } catch {
       return false;
     }

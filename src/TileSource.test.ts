@@ -168,3 +168,44 @@ describe('a TileJSON source', () => {
       .rejects.toThrow(/TileJSON .*HTTP 503.*\{z\}\/\{x\}\/\{y\}/);
   });
 });
+
+describe('the tile cache', () => {
+  const originalPersistDownloadedTiles = config.persistDownloadedTiles;
+  const originalCacheHome = process.env.XDG_CACHE_HOME;
+  let cacheHome = '';
+
+  beforeEach(() => {
+    cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mapscii-cache-'));
+    process.env.XDG_CACHE_HOME = cacheHome;
+    config.persistDownloadedTiles = true;
+  });
+
+  afterEach(() => {
+    config.persistDownloadedTiles = originalPersistDownloadedTiles;
+    if (originalCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+    else process.env.XDG_CACHE_HOME = originalCacheHome;
+    fs.rmSync(cacheHome, { recursive: true, force: true });
+  });
+
+  test('ignores empty tiles (cut short when mapscii exited), and fetches them again', async () => {
+    const served: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        served.push(new URL(request.url).pathname);
+        return new Response('', { status: 404 });
+      },
+    });
+    try {
+      const source = new TileSource();
+      await source.init(`http://127.0.0.1:${server.port}/{z}/{x}/{y}.pbf`);
+      fs.mkdirSync(path.join(source.cacheDir ?? '', '2'), { recursive: true });
+      fs.writeFileSync(path.join(source.cacheDir ?? '', '2', '1-1.pbf'), '');
+
+      await expect(source.getTile(2, 1, 1)).rejects.toThrow('not found');
+      expect(served).toEqual(['/2/1/1.pbf']);
+    } finally {
+      server.stop(true);
+    }
+  });
+});
