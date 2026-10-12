@@ -175,11 +175,12 @@ export default class Styler {
       case '!in':
         return (feature) => !filter.slice(2).find((value) => filterValueEquals(feature.properties[filter[1] as string], value));
 
+      // "has" is about the key, not its value: 0 and "" are there too
       case 'has':
-        return (feature) => !!feature.properties[filter[1] as string];
+        return (feature) => feature.properties[filter[1] as string] !== undefined;
 
       case '!has':
-        return (feature) => !feature.properties[filter[1] as string];
+        return (feature) => feature.properties[filter[1] as string] === undefined;
 
       case '>':
         return (feature) => (feature.properties[filter[1] as string] as number) > (filter[2] as number);

@@ -13,6 +13,7 @@
     "@aeroway_taxiway": "#f0ede9",
 
     "@aerodrome_label": "#666",
+    "@mountain_peak": "#aaa",
 
     "@background": "#000",
 
@@ -145,6 +146,7 @@
         "subclass",
         "garden",
         "golf_course",
+        "park",
         "recreation_ground",
         "village_green"
       ]
@@ -159,7 +161,7 @@
       "filter": [
         "==",
         "class",
-        "natural_reserve"
+        "nature_reserve"
       ]
     },
     {
@@ -1456,12 +1458,26 @@
           "$type",
           "Point"
         ],
-        [ 
-          "has", 
+        [
+          "has",
           "iata"
         ]
       ],
       "minzoom": 11
+    },
+    {
+      "type": "symbol",
+      "id": "mountain_peak",
+      "paint": {
+        "text-color": "@mountain_peak"
+      },
+      "source-layer": "mountain_peak",
+      "filter": [
+        "==",
+        "$type",
+        "Point"
+      ],
+      "minzoom": 12
     },
     {
       "type": "symbol",

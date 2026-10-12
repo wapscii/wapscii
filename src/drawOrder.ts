@@ -17,7 +17,8 @@ export function isLabelLayer(layerId: string): boolean {
     layerId === 'place' ||
     layerId === 'poi' ||
     layerId === 'housenumber' ||
-    layerId === 'mountain_peak'
+    layerId === 'mountain_peak' ||
+    layerId === 'aerodrome_label'
   );
 }
 
@@ -49,5 +50,6 @@ export function generateDrawOrder(zoom: number): string[] {
     'transportation_name',
     'housenumber',
     'mountain_peak',
+    'aerodrome_label',
   ];
 }
