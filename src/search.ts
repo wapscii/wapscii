@@ -16,6 +16,7 @@ import fs from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import ngeohash from 'ngeohash';
+import { terminalSafe } from './textShaping';
 
 export interface Place {
   lat: number;
@@ -30,11 +31,8 @@ export interface Place {
 
 export type SearchProvider = (query: string, signal: AbortSignal) => Promise<Place[]>;
 
-const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g; // eslint-disable-line no-control-regex
-
-/** Text from a query, a database or a web service, safe to print: no control or bidi override characters. */
 export function clean(text: unknown): string {
-  return String(text).replace(CONTROL_RE, ' ');
+  return terminalSafe(text);
 }
 
 const NUMBER = '[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)';

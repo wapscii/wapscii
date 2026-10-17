@@ -25,6 +25,7 @@ import Canvas from './Canvas';
 import { getCurrentLocation } from './Geolocation';
 import { showHelpModal } from './HelpModal';
 import { showSearchPrompt } from './SearchBox';
+import { terminalSafe } from './textShaping';
 import { clean, nominatimProvider, sqliteProvider, zoomForBox, type Place, type SearchProvider } from './search';
 import { showGlobeView } from './Globe';
 
@@ -776,8 +777,7 @@ export default class Mapscii {
   }
 
   private _singleLineStatusText(text: string): string {
-    return String(text)
-      .replace(/[\r\n\t]+/g, ' ')
+    return terminalSafe(text)
       .replace(/\s{2,}/g, ' ')
       .trimEnd();
   }
