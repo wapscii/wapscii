@@ -192,7 +192,7 @@ import TileSource, { TileNotFoundError } from './TileSource';
 import { term } from './InputHandler';
 import { baseZoom, ll2tile, tile2ll, LatLon, normalize } from './utils';
 import { TileFeature, TileLayer } from './Tile';
-import { clipPolylineToRect } from './clipping';
+import { clipPolylineToRect, dropTileClosureSegments } from './clipping';
 import { generateDrawOrder, isLabelLayer } from './drawOrder';
 import { colorFromHex } from './color';
 import { resolveStyleValue } from './styleValues';
@@ -1074,14 +1074,15 @@ function renderGlobeFeature(
   } else if (styleType === 'line' || (!styleType && geomType === 'LineString')) {
     // Line
     const linePoints = points as Point[];
-    if (linePoints[0] && typeof (linePoints[0] as Point).x === 'number') {
-      renderGlobeLine(canvas, transformer, linePoints, feature.color, tileToLatLon);
-    } else {
-      // Multi-line
-      for (const line of points as Point[][]) {
-        if (Array.isArray(line)) {
-          renderGlobeLine(canvas, transformer, line, feature.color, tileToLatLon);
-        }
+    const lines = linePoints[0] && typeof (linePoints[0] as Point).x === 'number'
+      ? [linePoints]
+      : (points as Point[][]).filter((line) => Array.isArray(line));
+    for (const line of lines) {
+      // Outlines of polygons (woods, boundaries): without the edges that
+      // clipping to the tile added, which showed as straight seams
+      const parts = geomType === 'Polygon' ? dropTileClosureSegments(line, extent) : [line];
+      for (const part of parts) {
+        renderGlobeLine(canvas, transformer, part, feature.color, tileToLatLon);
       }
     }
   } else {

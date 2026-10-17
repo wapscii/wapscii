@@ -147,3 +147,87 @@ export function clipPolylineToRect(
     return cleaned;
   }).filter((part) => part.length >= 2);
 }
+
+/**
+ * When a polygon is clipped to a tile, the clipping algorithm often introduces
+ * artificial segments along the tile boundary to "close" rings.
+ * If we render polygon outlines by stroking these rings, we get visible tile seams.
+ *
+ * Fix: for polygon rings rendered as lines, drop border segments created by clipping.
+ *
+ * Important: vector-tile coords are usually in [0, extent-1], not [0, extent].
+ * So we treat a 1-unit band near borders as "tile edge".
+ */
+export function dropTileClosureSegments(ring: ClipPoint[], extent: number): ClipPoint[][] {
+  if (!ring || ring.length < 2) return [];
+
+  // Remove explicit duplicate closing coordinate if present.
+  // We handle closure ourselves via wrap-around (i -> i+1 mod n).
+  const pts = ring.slice();
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  if (first && last && first.x === last.x && first.y === last.y) {
+    pts.pop();
+  }
+
+  const n = pts.length;
+  if (n < 2) return [];
+
+  // Vector-tile coords are typically integer in [0, extent-1].
+  // Treat a small band as "on the edge" so we also catch extent-1.
+  const EDGE_TOL = 1; // tile-coordinate units
+  const onLeft = (p: ClipPoint) => p.x <= EDGE_TOL;
+  const onTop = (p: ClipPoint) => p.y <= EDGE_TOL;
+  const onRight = (p: ClipPoint) => p.x >= (extent - EDGE_TOL);
+  const onBottom = (p: ClipPoint) => p.y >= (extent - EDGE_TOL);
+
+  // Only drop segments that are clearly "tile closure":
+  // - axis-aligned
+  // - both endpoints lie on the SAME tile border side
+  const isTileClosureSegment = (a: ClipPoint, b: ClipPoint): boolean => {
+    // Degenerate segment: ignore it (it would just spam pixels)
+    if (a.x === b.x && a.y === b.y) return true;
+
+    const horizontal = a.y === b.y;
+    const vertical = a.x === b.x;
+
+    if (horizontal) {
+      if ((onTop(a) && onTop(b)) || (onBottom(a) && onBottom(b))) return true;
+    }
+    if (vertical) {
+      if ((onLeft(a) && onLeft(b)) || (onRight(a) && onRight(b))) return true;
+    }
+    return false;
+  };
+
+  const parts: ClipPoint[][] = [];
+  let current: ClipPoint[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+
+    if (current.length === 0) current.push(a);
+
+    if (isTileClosureSegment(a, b)) {
+      if (current.length >= 2) parts.push(current);
+      current = [];
+    } else {
+      current.push(b);
+    }
+  }
+
+  if (current.length >= 2) parts.push(current);
+
+  // Clean consecutive duplicates that can appear due to wrap/breaks
+  return parts
+    .map((part) => {
+      const cleaned: ClipPoint[] = [];
+      for (const p of part) {
+        const prev = cleaned[cleaned.length - 1];
+        if (!prev || prev.x !== p.x || prev.y !== p.y) cleaned.push(p);
+      }
+      return cleaned;
+    })
+    .filter((part) => part.length >= 2);
+}
