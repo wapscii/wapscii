@@ -42,6 +42,7 @@
     "tools/maps-search-index",
     "docs/library-api.md",
     "docs/search.md",
+    "docs/telnet.md",
     "styles/*.json"
   ],
   "engines": {

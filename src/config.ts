@@ -98,6 +98,9 @@ export interface MapsciiConfig {
   onlineSearch: boolean;
   // Replaces both of them (library use)
   searchProvider?: SearchProvider;
+  // For people who aren't on this computer (telnet): no keys that write
+  // files, empty the shared cache or look up where the server is
+  restricted: boolean;
 }
 
 // Used unless the tile source names its own (in its TileJSON)
@@ -193,6 +196,8 @@ const config: MapsciiConfig = {
 
   searchDatabase: null,
   onlineSearch: true,
+
+  restricted: false,
 };
 
 export function createMapsciiConfig(overrides: Partial<MapsciiConfig> = {}): MapsciiConfig {

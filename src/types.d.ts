@@ -199,6 +199,24 @@ declare module 'terminal-kit' {
 
   const terminal: Terminal;
   export { terminal };
-  const terminalKit: { terminal: Terminal };
+  interface GuessedTerminal {
+    generic?: string;
+    appId?: string;
+    safe?: boolean;
+  }
+  const terminalKit: {
+    terminal: Terminal;
+    guessTerminal(unpipe?: boolean): GuessedTerminal;
+    createTerminal(options: {
+      stdin: NodeJS.ReadableStream;
+      stdout: NodeJS.WritableStream;
+      stderr: NodeJS.WritableStream;
+      generic: string;
+      appId?: string;
+      isTTY: boolean;
+      isSSH: boolean;
+      processSigwinch: boolean;
+    }): Terminal;
+  };
   export default terminalKit;
 }

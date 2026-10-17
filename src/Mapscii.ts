@@ -66,6 +66,8 @@ export interface MapsciiOptions {
   onlineSearch?: boolean;
   /** Your own place search, instead of the offline index and Nominatim */
   searchProvider?: SearchProvider;
+  /** No keys that save files (S), empty the tile cache (R) or locate (g): for telnet sessions */
+  restricted?: boolean;
   colorMode?: ColorMode;
   useTileWorker?: boolean;
   showAttribution?: boolean;
@@ -585,6 +587,10 @@ export default class Mapscii {
   private _handleKeyName(name: string): boolean {
     let handled = true;
     let draw = true;
+    if (config.restricted && (name === 'S' || name === 'R' || name === 'g')) {
+      this.notify('Not available here');
+      return true;
+    }
     switch (name) {
       case 'q':
         this.inputHandler?.stop();

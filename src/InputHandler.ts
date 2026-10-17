@@ -8,7 +8,27 @@
 // CommonJS: Node's ESM loader only gives it a default export
 import terminalKit from 'terminal-kit';
 
-const term = terminalKit.terminal;
+/**
+ * The terminal. A telnet session's output is a pipe to the server, for
+ * which terminal-kit would pick its "none" profile, without any escape
+ * sequences: the session tells it the client is a terminal of type $TERM.
+ */
+function createTerminal(): typeof terminalKit.terminal {
+  if (process.env.MAPSCII_TELNET_SESSION !== '1') return terminalKit.terminal;
+  const guessed = terminalKit.guessTerminal(true);
+  return terminalKit.createTerminal({
+    stdin: process.stdin,
+    stdout: process.stdout,
+    stderr: process.stderr,
+    generic: guessed.generic || 'xterm',
+    appId: guessed.safe ? guessed.appId : undefined,
+    isTTY: true,
+    isSSH: false,
+    processSigwinch: false,
+  });
+}
+
+const term = createTerminal();
 
 export interface InputEvent {
   type: 'key' | 'mouse' | 'scroll' | 'resize';
