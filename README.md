@@ -56,7 +56,7 @@ bun run build
 node bin/mapscii.js
 ```
 
-MapSCII's own demo was `telnet mapscii.me`; wapscii can serve one too (see below).
+MapSCII's own demo was `telnet mapscii.me`; wapscii can serve one too, over telnet or SSH (see below).
 
 ## Running
 
@@ -104,6 +104,15 @@ mapscii --telnet 2323 --telnetHost 0.0.0.0
 ```
 
 serves the map like MapSCII's old `telnet mapscii.me`: one session per connection, with its own position and settings. See [docs/telnet.md](./docs/telnet.md) for the limits and running it as a service.
+
+### SSH server
+
+```sh
+mapscii --ssh 2222 --sshHost 0.0.0.0
+ssh -p 2222 yourserver
+```
+
+does the same over SSH: encrypted, with no password, and nothing but the map (no shell, files or forwarding). See [docs/ssh.md](./docs/ssh.md) for the host key, and both servers can run at once.
 
 ## Keyboard shortcuts
 

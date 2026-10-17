@@ -98,7 +98,7 @@ export interface MapsciiConfig {
   onlineSearch: boolean;
   // Replaces both of them (library use)
   searchProvider?: SearchProvider;
-  // For people who aren't on this computer (telnet): no keys that write
+  // For people who aren't on this computer (telnet, SSH): no keys that write
   // files, empty the shared cache or look up where the server is
   restricted: boolean;
 }

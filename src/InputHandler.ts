@@ -9,12 +9,12 @@
 import terminalKit from 'terminal-kit';
 
 /**
- * The terminal. A telnet session's output is a pipe to the server, for
+ * The terminal. A telnet or SSH session's output is a pipe to the server, for
  * which terminal-kit would pick its "none" profile, without any escape
  * sequences: the session tells it the client is a terminal of type $TERM.
  */
 function createTerminal(): typeof terminalKit.terminal {
-  if (process.env.MAPSCII_TELNET_SESSION !== '1') return terminalKit.terminal;
+  if (process.env.MAPSCII_REMOTE_SESSION !== '1') return terminalKit.terminal;
   const guessed = terminalKit.guessTerminal(true);
   return terminalKit.createTerminal({
     stdin: process.stdin,

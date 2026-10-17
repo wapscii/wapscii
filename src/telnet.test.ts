@@ -3,6 +3,7 @@ import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
+import { SessionPool } from './sessions';
 import { GREETING, TelnetParser, clampSize, escapeIAC, startTelnetServer, termFor, type TelnetServer } from './telnet';
 
 const IAC = 255;
@@ -75,7 +76,7 @@ describe('the telnet server', () => {
   // stands in for a mapscii session: reports what it got
   const sessionScript = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mapscii-telnet-')), 'session.cjs');
   fs.writeFileSync(sessionScript, `
-    process.stdout.write('TERM=' + process.env.TERM + ' SIZE=' + process.env.MAPSCII_COLUMNS + 'x' + process.env.MAPSCII_ROWS + ' SESSION=' + process.env.MAPSCII_TELNET_SESSION + '\\n');
+    process.stdout.write('TERM=' + process.env.TERM + ' SIZE=' + process.env.MAPSCII_COLUMNS + 'x' + process.env.MAPSCII_ROWS + ' SESSION=' + process.env.MAPSCII_REMOTE_SESSION + '\\n');
     process.on('message', (m) => process.stdout.write('RESIZE ' + m.columns + 'x' + m.rows + '\\n'));
     process.stdin.on('data', (d) => {
       if (d.includes(113)) process.exit(0); // q
@@ -85,19 +86,16 @@ describe('the telnet server', () => {
   `);
 
   let server: TelnetServer | null = null;
+  let pool: SessionPool | null = null;
   afterEach(async () => {
+    pool?.closeAll();
     await server?.close();
     server = null;
   });
 
   const start = async (options: { maxSessions?: number; maxPerAddress?: number; idleMinutes?: number } = {}) => {
-    server = await startTelnetServer({
-      port: 0,
-      command: process.execPath,
-      args: [sessionScript],
-      negotiationMs: 300,
-      ...options,
-    });
+    pool = new SessionPool({ command: process.execPath, args: [sessionScript], ...options });
+    server = await startTelnetServer({ port: 0, pool, negotiationMs: 300 });
     return (server.server.address() as net.AddressInfo).port;
   };
 
@@ -141,7 +139,7 @@ describe('the telnet server', () => {
 
     client.socket.write('q');
     await client.closed;
-    expect(server?.sessions()).toBe(0);
+    expect(pool?.sessions()).toBe(0);
   });
 
   test('starts anyway when the client doesn\'t negotiate', async () => {
@@ -155,13 +153,13 @@ describe('the telnet server', () => {
   test('turns away clients beyond the limits', async () => {
     const port = await start({ maxSessions: 5, maxPerAddress: 1 });
     const first = await connect(port);
-    await until(() => server?.sessions() === 1);
+    await until(() => pool?.sessions() === 1);
     const second = await connect(port);
     await second.closed;
     expect(second.received().toString()).toContain('busy');
     first.socket.destroy();
     await first.closed;
-    await until(() => server?.sessions() === 0);
+    await until(() => pool?.sessions() === 0);
   });
 
   test('ends the session when the client goes', async () => {
@@ -169,6 +167,6 @@ describe('the telnet server', () => {
     const client = await connect(port);
     await until(() => client.received().toString('latin1').includes('SESSION=1'));
     client.socket.destroy();
-    await until(() => server?.sessions() === 0);
+    await until(() => pool?.sessions() === 0);
   });
 });

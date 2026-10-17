@@ -9,6 +9,8 @@
 import config from './src/config';
 import { defaultSearchDatabase } from './src/search';
 import { getCurrentLocation } from './src/Geolocation';
+import { SessionPool } from './src/sessions';
+import { startSshServer } from './src/ssh';
 import { startTelnetServer } from './src/telnet';
 import Mapscii from './src/Mapscii';
 import { MarkerInput, parseMarkersFromText } from './src/Markers';
@@ -205,23 +207,39 @@ const argv = await yargs(hideBin(process.argv))
     type: 'string',
     default: '127.0.0.1',
   })
-  .option('telnetMaxSessions', {
-    description: 'Telnet sessions at once (each is a process of about 85 MB)',
+  .option('ssh', {
+    description: 'Serve the map over SSH on this port: anyone gets a map session, nothing else (see docs/ssh.md)',
+    type: 'number',
+  })
+  .option('sshHost', {
+    description: 'Address the SSH server listens on; 0.0.0.0 or :: for everyone',
+    type: 'string',
+    default: '127.0.0.1',
+  })
+  .option('sshHostKey', {
+    description: 'The SSH server\'s private host key [default: ~/.local/state/wapscii/ssh_host_ed25519_key, made if missing]',
+    type: 'string',
+  })
+  .option('maxSessions', {
+    alias: 'telnetMaxSessions',
+    description: 'Telnet and SSH sessions at once (each is a process of about 85 MB)',
     type: 'number',
     default: 10,
   })
-  .option('telnetMaxPerAddress', {
-    description: 'Telnet sessions at once from one address',
+  .option('maxPerAddress', {
+    alias: 'telnetMaxPerAddress',
+    description: 'Telnet and SSH sessions at once from one address',
     type: 'number',
     default: 3,
   })
-  .option('telnetIdleMinutes', {
-    description: 'Close telnet sessions without input for this long',
+  .option('idleMinutes', {
+    alias: 'telnetIdleMinutes',
+    description: 'Close telnet and SSH sessions without input for this long',
     type: 'number',
     default: 15,
   })
-  .option('telnetSession', {
-    // a session of the telnet server, which starts it
+  .option('remoteSession', {
+    // a session of the telnet or SSH server, which starts it
     type: 'boolean',
     hidden: true,
     default: false,
@@ -229,8 +247,8 @@ const argv = await yargs(hideBin(process.argv))
   .strict()
   .parse();
 
-const telnetSession = argv.telnetSession;
-if (telnetSession) {
+const remoteSession = argv.remoteSession;
+if (remoteSession) {
   // The server passes the client's window size, and sends it again when it
   // changes; output is a pipe, which has no size of its own.
   const stdout = process.stdout as NodeJS.WriteStream & { columns: number; rows: number };
@@ -273,8 +291,8 @@ if (argv.geojson) {
 }
 
 // Read from stdin if available (non-TTY mode)
-// (a telnet session's stdin is the client's keyboard)
-const stdinData = telnetSession ? '' : await readInitialStdin();
+// (a telnet or SSH session's stdin is the client's keyboard)
+const stdinData = remoteSession ? '' : await readInitialStdin();
 if (stdinData) {
   markerInputs.push(...parseMarkersFromText(stdinData));
 }
@@ -285,7 +303,7 @@ let initialLon = argv.longitude;
 let locateOnStart = false;
 let locationSource = '';
 
-if (argv.locate && !telnetSession) {
+if (argv.locate && !remoteSession) {
   try {
     const location = await getCurrentLocation();
     initialLat = location.latitude;
@@ -333,9 +351,9 @@ const options = {
   noLabels: argv.noLabels,
   useMouse: argv.mouse,
   searchDatabase,
-  // telnet sessions: no searches from strangers on Nominatim in the server's name
-  onlineSearch: argv.onlineSearch && !telnetSession,
-  restricted: telnetSession,
+  // telnet and SSH sessions: no searches from strangers on Nominatim in the server's name
+  onlineSearch: argv.onlineSearch && !remoteSession,
+  restricted: remoteSession,
   showAttribution: !argv.noAttribution,
   attribution: argv.attribution,
   ansiScreenshotFile: argv.ansiScreenshot,
@@ -351,8 +369,8 @@ const options = {
   locationSource: locationSource,
 };
 
-if (argv.telnet !== undefined) {
-  await serveTelnet(argv.telnet);
+if (argv.telnet !== undefined || argv.ssh !== undefined) {
+  await serve();
 } else {
   const mapscii = new Mapscii(options);
   mapscii.init().catch((err) => {
@@ -363,7 +381,7 @@ if (argv.telnet !== undefined) {
   });
 }
 
-async function serveTelnet(port: number): Promise<void> {
+async function serve(): Promise<void> {
   // The sessions get the same map settings as the server
   const sessionArgs = [
     '--tile_source', argv.tile_source,
@@ -385,24 +403,35 @@ async function serveTelnet(port: number): Promise<void> {
     ...(searchDatabase ? ['--searchDb', searchDatabase] : []),
     ...(argv.geojson ? ['--geojson', argv.geojson] : []),
     ...(argv.marker ?? []).flatMap((marker) => ['--marker', String(marker)]),
-    '--telnetSession',
+    '--remoteSession',
   ];
   const runtimeArgs = process.versions.bun ? [] : ['--max-old-space-size=256'];
-  const server = await startTelnetServer({
-    port,
-    host: argv.telnetHost,
-    maxSessions: argv.telnetMaxSessions,
-    maxPerAddress: argv.telnetMaxPerAddress,
-    idleMinutes: argv.telnetIdleMinutes,
+  const log = (message: string) => console.log(`${new Date().toISOString()} ${message}`);
+  const pool = new SessionPool({
+    maxSessions: argv.maxSessions,
+    maxPerAddress: argv.maxPerAddress,
+    idleMinutes: argv.idleMinutes,
     command: process.execPath,
     args: [...runtimeArgs, process.argv[1], ...sessionArgs],
-    log: (message) => console.log(`${new Date().toISOString()} ${message}`),
+    log,
   });
-  const address = server.server.address();
-  const shown = typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address);
-  console.log(`mapscii telnet server on ${shown}`);
+  const closers: Array<() => Promise<void>> = [];
+  const shown = (address: string | { address: string; port: number } | null) =>
+    typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address);
+
+  if (argv.telnet !== undefined) {
+    const telnet = await startTelnetServer({ port: argv.telnet, host: argv.telnetHost, pool });
+    closers.push(telnet.close);
+    console.log(`mapscii telnet server on ${shown(telnet.server.address())}`);
+  }
+  if (argv.ssh !== undefined) {
+    const ssh = await startSshServer({ port: argv.ssh, host: argv.sshHost, pool, hostKeyFile: argv.sshHostKey, log });
+    closers.push(ssh.close);
+    console.log(`mapscii SSH server on ${shown(ssh.server.address())}, host key ${ssh.fingerprint}`);
+  }
   const stop = () => {
-    void server.close().then(() => process.exit(0));
+    pool.closeAll();
+    void Promise.all(closers.map((close) => close())).then(() => process.exit(0));
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
