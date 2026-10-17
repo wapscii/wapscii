@@ -41,9 +41,13 @@ allows.
 
 | Option | Default | |
 |---|---|---|
-| `--telnetMaxSessions` | 10 | sessions at once; each is a process of about 85 MB |
-| `--telnetMaxPerAddress` | 3 | sessions at once from one IP address |
-| `--telnetIdleMinutes` | 15 | a session without input for this long is closed |
+| `--maxSessions` | 10 | sessions at once; each is a process of about 85 MB |
+| `--maxPerAddress` | 3 | sessions at once from one IP address |
+| `--idleMinutes` | 15 | a session without input for this long is closed |
+
+With the [SSH server](./ssh.md) on too, the limits are for both. The
+older names, `--telnetMaxSessions`, `--telnetMaxPerAddress` and
+`--telnetIdleMinutes`, still work.
 
 Window sizes are kept between 20×8 and 400×200 characters, and the
 terminal type a client reports only chooses between a few known profiles
@@ -62,7 +66,7 @@ at it.
 ## Running it as a service
 
 Telnet is unencrypted: anyone on the way sees what is typed, which here is
-map navigation and searches. To serve on port 23 without running as root,
+map navigation and searches; [SSH](./ssh.md) isn't. To serve on port 23 without running as root,
 give the service `CAP_NET_BIND_SERVICE`, or redirect 23 to 2323 in the
 firewall.
 

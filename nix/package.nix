@@ -12,7 +12,7 @@
   nodejs,
   python3,
   makeWrapper,
-  nodeModulesHash ? "sha256-AdUpKkvWjX2Q2uocC4GD7lEO9fqMdv1VcTp0c0Tv2Hc=",
+  nodeModulesHash ? "sha256-GHbdiVn23Fr8KdWi82QkLpQsNByL235p8mLOFfVEkqI=",
 }:
 
 let

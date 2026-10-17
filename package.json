@@ -42,6 +42,7 @@
     "tools/maps-search-index",
     "docs/library-api.md",
     "docs/search.md",
+    "docs/ssh.md",
     "docs/telnet.md",
     "styles/*.json"
   ],
@@ -72,6 +73,7 @@
     "pngjs": "^7.0.0",
     "rbush": "^4.0.1",
     "simplify-js": "^1.2.4",
+    "ssh2": "^1.17.0",
     "string-width": "^8.1.0",
     "terminal-kit": "^3.1.2",
     "x256": "^0.0.2",
@@ -88,6 +90,7 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/rbush": "^4.0.0",
+    "@types/ssh2": "^1.15.6",
     "@types/yargs": "^17.0.35",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

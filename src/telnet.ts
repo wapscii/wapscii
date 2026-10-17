@@ -2,16 +2,17 @@
   MapSCII - Terminal Map Viewer
   Telnet server: `mapscii --telnet 2323`, then `telnet host 2323`.
 
-  Every connection gets a mapscii process of its own, so that sessions
-  share nothing but the tile cache on disk: their own settings, their own
-  terminal, and a crash or a hang ends one session only. The server speaks
-  the telnet protocol (RFC 854) and asks the client for its window size
-  (NAWS, RFC 1073) and terminal type (RFC 1091), which the session gets as
-  its size and $TERM.
+  The server speaks the telnet protocol (RFC 854) and asks the client for
+  its window size (NAWS, RFC 1073) and terminal type (RFC 1091), which the
+  session (sessions.ts: a mapscii process per connection) gets as its size
+  and $TERM.
 */
 
-import { spawn, type ChildProcess } from 'child_process';
 import net from 'net';
+import { clampSize, type SessionPool, type WindowSize } from './sessions';
+
+export { clampSize, termFor, MAX_COLUMNS, MAX_ROWS, MIN_COLUMNS, MIN_ROWS } from './sessions';
+export type { WindowSize } from './sessions';
 
 const IAC = 255;
 const DONT = 254;
@@ -36,38 +37,6 @@ export const GREETING = Buffer.from([
   IAC, DO, NAWS,
   IAC, DO, TTYPE,
 ]);
-
-export const MIN_COLUMNS = 20;
-export const MAX_COLUMNS = 400;
-export const MIN_ROWS = 8;
-export const MAX_ROWS = 200;
-
-export interface WindowSize {
-  columns: number;
-  rows: number;
-}
-
-/** Window sizes as clients report them, kept to what a session will draw. */
-export function clampSize(columns: number, rows: number): WindowSize {
-  return {
-    columns: Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, columns || 80)),
-    rows: Math.max(MIN_ROWS, Math.min(MAX_ROWS, rows || 24)),
-  };
-}
-
-/**
- * $TERM for a session, from the terminal type the client reported. Only a
- * few known profiles: the name decides which terminal-kit profile is
- * loaded, so it never comes from the client as it is.
- */
-export function termFor(terminalType: string | null): string {
-  const type = (terminalType ?? '').toLowerCase();
-  if (type.startsWith('rxvt')) return 'rxvt-unicode-256color';
-  if (type.startsWith('screen') || type.startsWith('tmux')) return 'screen-256color';
-  if (type === 'linux') return 'linux';
-  if (type.startsWith('vt1') || type === 'ansi' || type === 'dumb') return 'xterm';
-  return 'xterm-256color';
-}
 
 export interface TelnetEvents {
   /** keys and text typed, with the telnet protocol taken out */
@@ -186,73 +155,53 @@ export function escapeIAC(data: Buffer): Buffer {
 export interface TelnetServerOptions {
   port: number;
   host?: string;
-  /** sessions at once */
-  maxSessions?: number;
-  /** sessions at once from one address */
-  maxPerAddress?: number;
-  /** a session without input for this long ends */
-  idleMinutes?: number;
-  /** the session's command line: mapscii itself, with --telnetSession */
-  command: string;
-  args: string[];
+  /** the sessions and their limits, shared with the SSH server */
+  pool: SessionPool;
   /** how long to wait for the client's size and type before starting */
   negotiationMs?: number;
-  log?: (message: string) => void;
 }
 
 export interface TelnetServer {
   server: net.Server;
-  sessions: () => number;
   close: () => Promise<void>;
 }
 
 /** Starts the server; resolves once it listens. */
 export function startTelnetServer(options: TelnetServerOptions): Promise<TelnetServer> {
-  const maxSessions = options.maxSessions ?? 10;
-  const maxPerAddress = options.maxPerAddress ?? 3;
-  const idleMs = (options.idleMinutes ?? 15) * 60 * 1000;
   const negotiationMs = options.negotiationMs ?? 700;
-  const log = options.log ?? (() => undefined);
-  const children = new Set<ChildProcess>();
   const sockets = new Set<net.Socket>();
-  const perAddress = new Map<string, number>();
-  let open = 0;
 
   const server = net.createServer((socket) => {
-    const address = socket.remoteAddress ?? '?';
     socket.setNoDelay(true);
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
+    socket.on('error', () => undefined);
 
-    if (open >= maxSessions || (perAddress.get(address) ?? 0) >= maxPerAddress) {
+    const admission = options.pool.admit(socket.remoteAddress ?? '?', 'telnet');
+    if (!admission) {
       socket.end('mapscii is busy, please try again later.\r\n');
-      log(`${address}: refused, ${open} sessions`);
       return;
     }
-    open++;
-    perAddress.set(address, (perAddress.get(address) ?? 0) + 1);
-    log(`${address}: connected, ${open} sessions`);
 
     let size: WindowSize = { columns: 80, rows: 24 };
     let gotSize = false;
     let terminalType: string | null = null;
-    let child: ChildProcess | null = null;
+    let session: ReturnType<typeof admission.start> | null = null;
     let pending: Buffer[] = [];
     let closed = false;
 
     const startTimer = setTimeout(() => start(), negotiationMs);
-    let idleTimer = setTimeout(() => idle(), idleMs);
 
     const parser = new TelnetParser({
       data: (data) => {
-        if (child?.stdin?.writable) child.stdin.write(data);
-        else if (!child) pending.push(data);
+        if (session) session.input(data);
+        else pending.push(data);
       },
       reply: (data) => socket.write(data),
       size: (next) => {
         size = next;
         gotSize = true;
-        child?.send?.({ type: 'resize', ...size });
+        session?.resize(size);
         if (terminalType !== null) start();
       },
       terminalType: (type) => {
@@ -263,58 +212,21 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<TelnetS
 
     function start(): void {
       clearTimeout(startTimer);
-      if (child || closed) return;
-      child = spawn(options.command, options.args, {
-        stdio: ['pipe', 'pipe', 'ignore', 'ipc'],
-        env: {
-          ...process.env,
-          TERM: termFor(terminalType),
-          MAPSCII_TELNET_SESSION: '1',
-          MAPSCII_COLUMNS: String(size.columns),
-          MAPSCII_ROWS: String(size.rows),
-        },
-      });
-      children.add(child);
-      child.stdout?.on('data', (data: Buffer) => {
-        if (!socket.write(escapeIAC(data))) {
-          // a slow client: let the session wait instead of piling up frames
-          child?.stdout?.pause();
-          socket.once('drain', () => child?.stdout?.resume());
-        }
-      });
-      child.stdin?.on('error', () => undefined);
-      child.on('exit', () => {
-        if (child) children.delete(child);
-        socket.end();
-      });
-      child.on('error', (error) => {
-        log(`${address}: session failed: ${error.message}`);
-        socket.end();
-      });
-      for (const data of pending) child.stdin?.write(data);
+      if (session || closed) return;
+      session = admission!.start({
+        write: (data) => socket.write(escapeIAC(data)),
+        onceDrain: (callback) => socket.once('drain', callback),
+        end: (message) => (message ? socket.end(message) : socket.end()),
+      }, { type: terminalType, size: clampSize(size.columns, size.rows) });
+      for (const data of pending) session.input(data);
       pending = [];
     }
 
-    function idle(): void {
-      socket.end('\x1b[0m\r\nNo input for a while: bye!\r\n');
-    }
-
-    socket.on('data', (chunk: Buffer) => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => idle(), idleMs);
-      parser.push(chunk);
-    });
-    socket.on('error', () => undefined);
+    socket.on('data', (chunk: Buffer) => parser.push(chunk));
     socket.on('close', () => {
       closed = true;
       clearTimeout(startTimer);
-      clearTimeout(idleTimer);
-      if (child && child.exitCode === null) child.kill('SIGTERM');
-      open--;
-      const left = (perAddress.get(address) ?? 1) - 1;
-      if (left > 0) perAddress.set(address, left);
-      else perAddress.delete(address);
-      log(`${address}: closed, ${open} sessions`);
+      admission.release();
     });
 
     socket.write(GREETING);
@@ -326,9 +238,7 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<TelnetS
       server.off('error', reject);
       resolve({
         server,
-        sessions: () => open,
         close: () => new Promise((done) => {
-          for (const child of children) child.kill('SIGTERM');
           for (const socket of sockets) socket.destroy();
           server.close(() => done());
         }),

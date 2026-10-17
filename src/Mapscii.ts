@@ -66,7 +66,7 @@ export interface MapsciiOptions {
   onlineSearch?: boolean;
   /** Your own place search, instead of the offline index and Nominatim */
   searchProvider?: SearchProvider;
-  /** No keys that save files (S), empty the tile cache (R) or locate (g): for telnet sessions */
+  /** No keys that save files (S), empty the tile cache (R) or locate (g): for telnet and SSH sessions */
   restricted?: boolean;
   colorMode?: ColorMode;
   useTileWorker?: boolean;
