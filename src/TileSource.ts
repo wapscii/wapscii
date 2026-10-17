@@ -46,6 +46,17 @@ interface TileJSON {
   attribution?: string;
 }
 
+/** Whether an HTTP source is a server on this computer. */
+export function isLocalSource(source: string): boolean {
+  let host: string;
+  try {
+    host = new URL(source).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return host === 'localhost' || host === '[::1]' || host === '::1' || /^127\.\d+\.\d+\.\d+$/.test(host);
+}
+
 /** Whether an HTTP source is a URL template with {z}, {x} and {y} in it. */
 export function isTileUrlTemplate(source: string): boolean {
   return source.includes('{z}') && source.includes('{x}') && (source.includes('{y}') || source.includes('{-y}'));
@@ -193,7 +204,9 @@ export default class TileSource {
     this.maxZoom = null;
 
     if (this.source.startsWith('http')) {
-      this.cacheDir = sourceCacheDir(this.source);
+      // A tile server on this computer has its tiles already: copying them
+      // into the cache only fills the disk (a different folder per port)
+      this.cacheDir = isLocalSource(this.source) && !config.cacheLocalSources ? null : sourceCacheDir(this.source);
       if (config.persistDownloadedTiles) {
         this._initPersistence();
       }

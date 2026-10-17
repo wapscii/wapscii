@@ -62,6 +62,8 @@ export interface MapsciiConfig {
   colorMode: ColorMode;
   useTileWorker: boolean;
   persistDownloadedTiles: boolean;
+  // Cache the tiles of servers on this computer (localhost) too
+  cacheLocalSources: boolean;
   tileRange: number;
   projectSize: number;
   labelMargin: number;
@@ -129,6 +131,7 @@ const config: MapsciiConfig = {
 
   // Downloaded files get persisted in ~/.cache/mapscii
   persistDownloadedTiles: true,
+  cacheLocalSources: false,
 
   tileRange: 14,
   projectSize: 256,

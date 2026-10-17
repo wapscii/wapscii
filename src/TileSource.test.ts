@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import config from './config';
-import TileSource, { attributionText, isTileUrlTemplate, sourceCacheDir, tileUrl } from './TileSource';
+import TileSource, { attributionText, isLocalSource, isTileUrlTemplate, sourceCacheDir, tileUrl } from './TileSource';
 
 describe('TileSource', () => {
   const originalPersistDownloadedTiles = config.persistDownloadedTiles;
@@ -17,6 +17,7 @@ describe('TileSource', () => {
 
   afterEach(() => {
     config.persistDownloadedTiles = originalPersistDownloadedTiles;
+    config.cacheLocalSources = false;
     if (originalCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
     else process.env.XDG_CACHE_HOME = originalCacheHome;
     fs.rmSync(cacheHome, { recursive: true, force: true });
@@ -36,15 +37,15 @@ describe('TileSource', () => {
       config.persistDownloadedTiles = true;
 
       const a = new TileSource();
-      await a.init('http://127.0.0.1:1/a/');
+      await a.init('http://tiles.example.test/a/');
       const b = new TileSource();
-      await b.init('http://127.0.0.1:1/b/');
+      await b.init('http://tiles.example.test/b/');
 
-      expect(a.cacheDir).toBe(sourceCacheDir('http://127.0.0.1:1/a/'));
+      expect(a.cacheDir).toBe(sourceCacheDir('http://tiles.example.test/a/'));
       expect(a.cacheDir).not.toBe(b.cacheDir);
       expect(a.cacheDir?.startsWith(path.join(cacheHome, 'mapscii', 'sources'))).toBe(true);
       expect(fs.readFileSync(path.join(a.cacheDir ?? '', 'source.txt'), 'utf8').trim())
-        .toBe('http://127.0.0.1:1/a/');
+        .toBe('http://tiles.example.test/a/');
     });
   });
 
@@ -68,9 +69,9 @@ describe('TileSource', () => {
       config.persistDownloadedTiles = true;
 
       const a = new TileSource();
-      await a.init('http://127.0.0.1:1/a/');
+      await a.init('http://tiles.example.test/a/');
       const b = new TileSource();
-      await b.init('http://127.0.0.1:1/b/');
+      await b.init('http://tiles.example.test/b/');
 
       a.resetCache();
 
@@ -110,6 +111,7 @@ describe('a TileJSON source', () => {
     cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mapscii-cache-'));
     process.env.XDG_CACHE_HOME = cacheHome;
     config.persistDownloadedTiles = true;
+    config.cacheLocalSources = true; // the test server is on this computer
     served = [];
     up = true;
     server = Bun.serve({
@@ -134,6 +136,7 @@ describe('a TileJSON source', () => {
   afterEach(() => {
     server?.stop(true);
     config.persistDownloadedTiles = originalPersistDownloadedTiles;
+    config.cacheLocalSources = false;
     if (originalCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
     else process.env.XDG_CACHE_HOME = originalCacheHome;
     fs.rmSync(cacheHome, { recursive: true, force: true });
@@ -178,10 +181,12 @@ describe('the tile cache', () => {
     cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mapscii-cache-'));
     process.env.XDG_CACHE_HOME = cacheHome;
     config.persistDownloadedTiles = true;
+    config.cacheLocalSources = true; // the test server is on this computer
   });
 
   afterEach(() => {
     config.persistDownloadedTiles = originalPersistDownloadedTiles;
+    config.cacheLocalSources = false;
     if (originalCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
     else process.env.XDG_CACHE_HOME = originalCacheHome;
     fs.rmSync(cacheHome, { recursive: true, force: true });
@@ -206,6 +211,33 @@ describe('the tile cache', () => {
       expect(served).toEqual(['/2/1/1.pbf']);
     } finally {
       server.stop(true);
+    }
+  });
+});
+
+describe('tile servers on this computer', () => {
+  test('are recognised', () => {
+    expect(isLocalSource('http://127.0.0.1:8765/')).toBe(true);
+    expect(isLocalSource('http://localhost:8080/data/v3.json')).toBe(true);
+    expect(isLocalSource('http://[::1]:8080/{z}/{x}/{y}.pbf')).toBe(true);
+    expect(isLocalSource('https://tiles.openfreemap.org/planet')).toBe(false);
+    expect(isLocalSource('http://127.0.0.1.example.org/')).toBe(false);
+  });
+
+  test('have no disk cache: their tiles are on disk already', async () => {
+    const originalCacheHome = process.env.XDG_CACHE_HOME;
+    const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mapscii-cache-'));
+    process.env.XDG_CACHE_HOME = cacheHome;
+    config.persistDownloadedTiles = true;
+    try {
+      const source = new TileSource();
+      await source.init('http://127.0.0.1:45678/');
+      expect(source.cacheDir).toBeNull();
+      expect(fs.existsSync(path.join(cacheHome, 'mapscii'))).toBe(false);
+    } finally {
+      if (originalCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+      else process.env.XDG_CACHE_HOME = originalCacheHome;
+      fs.rmSync(cacheHome, { recursive: true, force: true });
     }
   });
 });

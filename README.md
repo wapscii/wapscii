@@ -95,7 +95,7 @@ mapscii --no-mouse                       # leave the mouse to the terminal
 
 Tiles are fetched up to the source's highest zoom level (14 for OpenMapTiles) and scaled beyond it.
 
-Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source.
+Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source. Tile servers on this computer (`localhost`, `127.0.0.1`) aren't cached: their tiles are on disk already.
 
 ## Keyboard shortcuts
 
