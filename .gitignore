@@ -9,3 +9,5 @@ tiles
 /analysis
 .vscode
 __pycache__/
+result
+result-*

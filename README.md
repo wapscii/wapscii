@@ -32,6 +32,20 @@ npm install -g wapscii
 mapscii
 ```
 
+With Nix (flakes):
+
+```sh
+nix run github:wapscii/wapscii                 # try it
+nix profile install github:wapscii/wapscii     # mapscii, wapscii, wapscii-search-index
+```
+
+In a NixOS or home-manager flake: an input `wapscii.url = "github:wapscii/wapscii";`
+and `inputs.wapscii.packages.${system}.default` in your packages (or
+`inputs.wapscii.overlays.default` for `pkgs.wapscii`). Leave out
+`inputs.nixpkgs.follows` for it: the npm packages are checked against a
+hash, and another nixpkgs' bun may install them differently. When
+`bun.lock` changes, `nix build` says the new hash for `nix/package.nix`.
+
 From the source ([Bun](https://bun.sh) builds it):
 
 ```sh
