@@ -15,6 +15,7 @@ import { execFile } from 'child_process';
 import fs from 'fs';
 import { homedir } from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import ngeohash from 'ngeohash';
 import { terminalSafe } from './textShaping';
 
@@ -102,42 +103,46 @@ export function defaultSearchDatabase(): string {
   return path.join(dataHome, 'mapscii', 'search.sqlite');
 }
 
+/** tools/maps-search-index, next to src/ and dist/ */
+export const SEARCH_INDEX_TOOL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'maps-search-index');
+
+/** The Python that runs the index tool. */
+export function defaultPython(): string {
+  return process.env.MAPSCII_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+}
+
 /**
- * Places from an offline index made by tools/maps-search-index (GeoNames).
- * Read with the sqlite3 program: read-only, no shell, the query escaped for
- * FTS and SQL, output and time capped. No native module to install.
+ * Places from an offline index made by tools/maps-search-index (GeoNames),
+ * asked through that same tool (--search) and so through the SQLite that
+ * wrote the index: a system sqlite3 program can be older, or built
+ * without FTS5. The query goes as one argument, without a shell, and
+ * is bound as an SQL parameter; output and time are capped.
  */
-export function sqliteProvider(database: string, command = process.env.MAPSCII_SQLITE || 'sqlite3'): SearchProvider {
+export function sqliteProvider(database: string, python = defaultPython(), tool = SEARCH_INDEX_TOOL): SearchProvider {
   return (query, signal) => new Promise((resolve, reject) => {
     if (!fs.existsSync(database)) {
       reject(new Error(`No offline index at ${database} (tools/maps-search-index makes one)`));
       return;
     }
-    // every word a prefix, all of them needed; accents don't matter
-    const tokens = query.slice(0, 256).normalize('NFKD').replace(/[̀-ͯ]/g, '')
-      .split(/[\s,]+/).filter(Boolean).slice(0, 12);
-    if (!tokens.length) {
+    if (!query.trim()) {
       resolve([]);
       return;
     }
-    const match = tokens.map((token) => `"${token.replace(/"/g, '""')}"*`).join(' AND ').replace(/'/g, '\'\'');
-    const sql = `SELECT p.label, p.lat, p.lon FROM place_names AS f
-      JOIN places AS p ON p.id = f.rowid WHERE place_names MATCH '${match}'
-      ORDER BY p.population DESC, p.name, p.id LIMIT 10;`;
-    execFile(command, ['-readonly', '-json', path.resolve(database), sql],
-      { timeout: 3000, maxBuffer: 256 * 1024, signal }, (error, stdout) => {
+    execFile(python, ['-I', tool, '--index', path.resolve(database), `--search=${query.slice(0, 256)}`],
+      { timeout: 5000, maxBuffer: 256 * 1024, signal, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           const code = (error as NodeJS.ErrnoException).code;
+          const reason = String(stderr).trim().split('\n').pop()?.replace(/^maps-search-index: /, '');
           reject(new Error(code === 'ENOENT'
-            ? 'The offline index needs the sqlite3 program'
-            : code === 'ABORT_ERR' ? 'cancelled' : 'Cannot read the offline index'));
+            ? `The offline index needs Python 3 (${python})`
+            : code === 'ABORT_ERR' ? 'cancelled' : `Cannot read the offline index${reason ? `: ${reason}` : ''}`));
           return;
         }
         try {
           const rows = JSON.parse(stdout || '[]') as Array<{ label: string; lat: number; lon: number }>;
           resolve(rows.map((row) => ({ lat: row.lat, lon: row.lon, label: row.label, kind: 'place' as const })));
         } catch {
-          reject(new Error('Cannot read the offline index'));
+          reject(new Error('Cannot read the offline index: unexpected answer'));
         }
       });
   });

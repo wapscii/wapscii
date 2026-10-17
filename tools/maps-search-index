@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Build mapscii's offline place index from a GeoNames TSV or ZIP (Python 3)."""
+"""Build mapscii's offline place index from a GeoNames TSV or ZIP, and search it (Python 3).
+
+mapscii searches the index with --search, through this same Python: the
+index is always read by the SQLite it was written with.
+"""
 import argparse
 import contextlib
 import datetime
 import io
+import json
 import math
 import os
 from pathlib import Path
@@ -11,7 +16,6 @@ import sqlite3
 import sys
 import tempfile
 import unicodedata
-import urllib.request
 import zipfile
 
 ATTRIBUTION = "GeoNames (https://www.geonames.org), CC BY 4.0"
@@ -37,6 +41,24 @@ def source_text(source):
 def normalized(text):
     return ''.join(c for c in unicodedata.normalize('NFKD', text)
                    if not '\u0300' <= c <= '\u036f')
+
+
+def search(index, query, limit=10):
+    """Places whose names start with every word of the query, bigger ones first."""
+    words = normalized(query[:256]).replace(',', ' ').split()[:12]
+    if not words:
+        return []
+    # each word quoted for FTS5, and the whole bound as a parameter
+    match = ' AND '.join('"%s"*' % word.replace('"', '""') for word in words)
+    path = Path(index).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f'no index at {path}')
+    with contextlib.closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
+        rows = db.execute(
+            'SELECT p.label, p.lat, p.lon FROM place_names AS f JOIN places AS p ON p.id = f.rowid '
+            'WHERE place_names MATCH ? ORDER BY p.population DESC, p.name, p.id LIMIT ?',
+            (match, limit)).fetchall()
+    return [{'label': label, 'lat': lat, 'lon': lon} for label, lat, lon in rows]
 
 
 def build(source, output, replace=False, provenance=None):
@@ -121,14 +143,24 @@ def main():
     parser.add_argument('source', nargs='?', help='GeoNames 19-column TSV or ZIP')
     parser.add_argument('--download', choices=['cities500', 'cities1000', 'cities5000', 'cities15000'],
                         help='explicitly download one GeoNames city dataset over HTTPS')
-    parser.add_argument('--output', type=Path, default=Path(os.environ.get(
-        'XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'mapscii/search.sqlite')
+    parser.add_argument('--output', '--index', type=Path, default=Path(os.environ.get(
+        'XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'mapscii/search.sqlite',
+                        help='the index (default: ~/.local/share/mapscii/search.sqlite)')
     parser.add_argument('--replace', action='store_true', help='atomically replace an existing index')
+    parser.add_argument('--search', metavar='QUERY',
+                        help='print the places matching QUERY as JSON (--search=QUERY if it starts with -)')
     args = parser.parse_args()
+    if args.search is not None:
+        try:
+            print(json.dumps(search(args.output, args.search)))
+        except (OSError, sqlite3.Error) as error:
+            parser.exit(1, f'maps-search-index: {error}\n')
+        return
     if bool(args.source) == bool(args.download):
         parser.error('provide either a source file or --download DATASET')
     try:
         if args.download:
+            import urllib.request  # only here: it takes a while to load
             url = f'https://download.geonames.org/export/dump/{args.download}.zip'
             with tempfile.TemporaryDirectory(prefix='maps-search-') as folder:
                 source = Path(folder) / (args.download + '.zip')

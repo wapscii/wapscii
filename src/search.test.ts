@@ -5,7 +5,9 @@ import os from 'os';
 import path from 'path';
 import {
   SearchSession,
+  SEARCH_INDEX_TOOL,
   clean,
+  defaultPython,
   nominatimProvider,
   parseCoordinates,
   parseGeohash,
@@ -213,10 +215,11 @@ describe('Nominatim', () => {
   });
 });
 
+// Python with SQLite's FTS5, which the index tool needs
+const python = defaultPython();
 const sqlite = (() => {
   try {
-    execFileSync(process.env.MAPSCII_SQLITE || 'sqlite3', ['-version']);
-    execFileSync('python3', ['--version']);
+    execFileSync(python, ['-c', 'import sqlite3; sqlite3.connect(":memory:").execute("CREATE VIRTUAL TABLE t USING fts5(x)")']);
     return true;
   } catch {
     return false;
@@ -236,7 +239,7 @@ describe.skipIf(!sqlite)('the offline index', () => {
         row(2, 'Munich', 'Munich', '', 48.67, -98.83, 200),
         row(3, 'L\'Aquila', 'LAquila', '', 42.35, 13.4, 70000),
       ].join('\n'));
-      execFileSync('python3', ['-B', path.join(import.meta.dir, '..', 'tools', 'maps-search-index'), source, '--output', database]);
+      execFileSync(python, ['-B', SEARCH_INDEX_TOOL, source, '--output', database]);
       const provider = sqliteProvider(database);
       const ask = (query: string) => provider(query, new AbortController().signal);
       expect((await ask('munich'))[0].label).toBe('München, BY, DE');
@@ -245,6 +248,7 @@ describe.skipIf(!sqlite)('the offline index', () => {
       expect((await ask('L\'Aquila'))[0].label).toBe('L\'Aquila, BY, DE');
       await ask('x\' OR 1=1; DROP TABLE places; --');
       await ask('" OR * NOT (');
+      expect(await ask('-12')).toEqual([]); // not taken for an option
       expect((await ask('Munich')).length).toBe(2);
       await expect(sqliteProvider(path.join(folder, 'absent'))('test', new AbortController().signal))
         .rejects.toThrow('No offline index');

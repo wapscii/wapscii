@@ -66,6 +66,25 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(index.build(archive, self.output), (1, 0))
         self.assertFalse((self.folder.parent / 'outside.txt').exists())
 
+    def test_search(self):
+        aquila = row(3, name="L'Aquila").replace('Munchen\tMunich,慕尼黑', 'LAquila\t')
+        self.source.write_text(row() + aquila, encoding='utf-8')
+        index.build(self.source, self.output)
+        self.assertEqual(index.search(self.output, 'münch')[0]['label'], 'München, BY, DE')
+        self.assertEqual(index.search(self.output, '慕尼黑')[0]['label'], 'München, BY, DE')
+        self.assertEqual(index.search(self.output, "l'aquila")[0]['label'], "L'Aquila, BY, DE")
+        self.assertEqual(index.search(self.output, '" OR * NOT ('), [])
+        self.assertEqual(index.search(self.output, '   '), [])
+        with self.assertRaises(FileNotFoundError):
+            index.search(self.folder / 'absent.sqlite', 'x')
+
+    def test_search_never_writes(self):
+        index.build(self.source, self.output)
+        before = self.output.read_bytes()
+        index.search(self.output, 'Munich')
+        self.assertEqual(self.output.read_bytes(), before)
+        self.assertFalse(list(self.folder.glob('search.sqlite-*')))
+
 
 if __name__ == '__main__':
     unittest.main()

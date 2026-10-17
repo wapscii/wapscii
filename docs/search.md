@@ -59,9 +59,15 @@ and bigger places come first. Labels add the region and country codes, to
 tell namesakes apart. A city dump is not an address geocoder: streets are
 Nominatim's.
 
-The index is read with the `sqlite3` program (read-only, without a shell,
-the query escaped for FTS and SQL, output and time capped), so mapscii
-needs no native module for it. `$MAPSCII_SQLITE` names another `sqlite3`.
+mapscii reads the index through the same tool (`--search`), so through
+the SQLite that wrote it: a system `sqlite3` program can be older, or
+built without FTS5. The query goes to it as one argument, without a
+shell, and is bound as an SQL parameter; output and time are capped.
+`$MAPSCII_PYTHON` names another Python. To try a query yourself:
+
+```sh
+python3 tools/maps-search-index --search 'sant julia'
+```
 
 GeoNames data is licensed under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): keep the
@@ -86,6 +92,6 @@ before they reach the terminal.
 
 ## Tests
 
-`bun test` (the prompt, the providers, a real index when `sqlite3` and
-`python3` are there) and `python3 tools/test_maps_search_index.py` (the
+`bun test` (the prompt, the providers, a real index when Python with
+FTS5 is there) and `python3 tools/test_maps_search_index.py` (the
 importer).
