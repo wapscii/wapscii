@@ -122,15 +122,25 @@ def build(source, output, replace=False, provenance=None):
             ])
             db.execute("INSERT INTO place_names(place_names) VALUES ('optimize')")
             db.commit()
-        with open(temporary, 'rb') as ready:
+        # read and write: Windows can only flush files open for writing
+        with open(temporary, 'r+b') as ready:
             os.fsync(ready.fileno())
         os.chmod(temporary, 0o644)
         if replace:
             os.replace(temporary, output)
         else:
-            # Atomic, without replacing an index created by another process meanwhile.
-            os.link(temporary, output)
-            os.unlink(temporary)
+            try:
+                # Atomic, without replacing an index created by another process meanwhile.
+                os.link(temporary, output)
+            except FileExistsError:
+                raise ValueError(f'{output} exists; use --replace to rebuild it') from None
+            except OSError:
+                # no hard links on this file system (FAT, some network drives)
+                if output.exists():
+                    raise ValueError(f'{output} exists; use --replace to rebuild it') from None
+                os.replace(temporary, output)
+            else:
+                os.unlink(temporary)
     finally:
         for suffix in ('', '-journal', '-wal', '-shm'):
             with contextlib.suppress(FileNotFoundError):
