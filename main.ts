@@ -301,5 +301,7 @@ const options = {
 const mapscii = new Mapscii(options);
 mapscii.init().catch((err) => {
   console.error('Failed to start MapSCII.');
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
+  // input is already grabbed: without this the terminal waits for Ctrl-C
+  process.exit(1);
 });
