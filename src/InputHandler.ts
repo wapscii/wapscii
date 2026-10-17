@@ -81,6 +81,7 @@ export default class InputHandler {
   private keyHandler: KeyHandler | null = null;
   private mouseHandler: MouseHandler | null = null;
   private resizeHandler: ResizeHandler | null = null;
+  private motionTurnedOn: boolean = false;
 
   constructor(_input: NodeJS.ReadStream, _output: NodeJS.WriteStream) {
     // We use terminal-kit's terminal directly, ignoring passed streams
@@ -93,6 +94,14 @@ export default class InputHandler {
     // Mouse tracking with motion, unless the mouse should stay the terminal's
     // (selecting text, scrolling back)
     term.grabInput(options.mouse === false ? true : { mouse: 'motion' });
+
+    // terminal-kit believes rxvt can't report mouse motion and only asks for
+    // clicks (mode 1000), so dragging and hovering did nothing in urxvt.
+    // rxvt-unicode does report motion (mode 1003).
+    if (options.mouse !== false && /^rxvt/.test(process.env.TERM ?? '')) {
+      process.stdout.write('\x1b[?1003h');
+      this.motionTurnedOn = true;
+    }
 
     // Create bound handlers so we can remove them later
     this.keyHandler = (name: string, _matches: string[], _data: KeyData) => {
@@ -176,6 +185,10 @@ export default class InputHandler {
     }
 
     // Disable input grabbing
+    if (this.motionTurnedOn) {
+      process.stdout.write('\x1b[?1003l');
+      this.motionTurnedOn = false;
+    }
     term.grabInput(false);
   }
 }

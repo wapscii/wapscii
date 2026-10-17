@@ -52,6 +52,39 @@ describe('InputHandler', () => {
   });
 });
 
+describe('rxvt mouse motion', () => {
+  test('is asked for on rxvt, and turned off again', () => {
+    const written: string[] = [];
+    const originalGrab = term.grabInput;
+    const originalWrite = process.stdout.write;
+    const originalTerm = process.env.TERM;
+    term.grabInput = () => undefined;
+    process.stdout.write = ((chunk: string) => {
+      written.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      process.env.TERM = 'rxvt-unicode-256color';
+      const handler = new InputHandler(process.stdin, process.stdout);
+      handler.start(() => undefined);
+      handler.stop();
+      const noMouse = new InputHandler(process.stdin, process.stdout);
+      noMouse.start(() => undefined, { mouse: false });
+      noMouse.stop();
+      process.env.TERM = 'xterm-256color';
+      const xterm = new InputHandler(process.stdin, process.stdout);
+      xterm.start(() => undefined);
+      xterm.stop();
+    } finally {
+      term.grabInput = originalGrab;
+      process.stdout.write = originalWrite;
+      if (originalTerm === undefined) delete process.env.TERM;
+      else process.env.TERM = originalTerm;
+    }
+    expect(written).toEqual(['\x1b[?1003h', '\x1b[?1003l']);
+  });
+});
+
 describe('terminal-kit key map', () => {
   test('learns rxvt\'s Shift+arrows, without replacing known keys', () => {
     const known = { code: '\x1b[c', name: 'SOMETHING', matches: ['SOMETHING'] };
