@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline-index regression tests; no downloads or third-party Python modules."""
+import contextlib
 import importlib.machinery
 import importlib.util
 from pathlib import Path
@@ -36,7 +37,7 @@ class IndexTests(unittest.TestCase):
     def test_records_duplicates_and_invalid_coordinates(self):
         self.source.write_text(row() + row() + row(2, 'nan') + 'invalid\n', encoding='utf-8')
         self.assertEqual(index.build(self.source, self.output), (1, 3))
-        with sqlite3.connect(self.output) as db:
+        with contextlib.closing(sqlite3.connect(self.output)) as db:
             self.assertEqual(db.execute('SELECT name FROM places').fetchone()[0], 'München')
             self.assertIn('CC BY 4.0', dict(db.execute('SELECT * FROM metadata'))['attribution'])
             self.assertEqual(db.execute("SELECT count(*) FROM place_names WHERE names MATCH 'Munich'").fetchone()[0], 1)
@@ -56,7 +57,7 @@ class IndexTests(unittest.TestCase):
         index.build(self.source, self.output)
         self.source.write_text(row(2, name='Berlin'), encoding='utf-8')
         index.build(self.source, self.output, replace=True)
-        with sqlite3.connect(self.output) as db:
+        with contextlib.closing(sqlite3.connect(self.output)) as db:
             self.assertEqual(db.execute('SELECT name FROM places').fetchall(), [('Berlin',)])
 
     def test_zip_is_streamed_without_extracting_paths(self):
