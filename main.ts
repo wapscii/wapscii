@@ -9,6 +9,7 @@
 import config from './src/config';
 import { defaultSearchDatabase } from './src/search';
 import { getCurrentLocation } from './src/Geolocation';
+import { startTelnetServer } from './src/telnet';
 import Mapscii from './src/Mapscii';
 import { MarkerInput, parseMarkersFromText } from './src/Markers';
 import yargs from 'yargs';
@@ -195,8 +196,57 @@ const argv = await yargs(hideBin(process.argv))
     type: 'number',
     default: config.terrain.opacity,
   })
+  .option('telnet', {
+    description: 'Serve the map over telnet on this port (one session per connection; see docs/telnet.md)',
+    type: 'number',
+  })
+  .option('telnetHost', {
+    description: 'Address the telnet server listens on; 0.0.0.0 or :: for everyone',
+    type: 'string',
+    default: '127.0.0.1',
+  })
+  .option('telnetMaxSessions', {
+    description: 'Telnet sessions at once (each is a process of about 85 MB)',
+    type: 'number',
+    default: 10,
+  })
+  .option('telnetMaxPerAddress', {
+    description: 'Telnet sessions at once from one address',
+    type: 'number',
+    default: 3,
+  })
+  .option('telnetIdleMinutes', {
+    description: 'Close telnet sessions without input for this long',
+    type: 'number',
+    default: 15,
+  })
+  .option('telnetSession', {
+    // a session of the telnet server, which starts it
+    type: 'boolean',
+    hidden: true,
+    default: false,
+  })
   .strict()
   .parse();
+
+const telnetSession = argv.telnetSession;
+if (telnetSession) {
+  // The server passes the client's window size, and sends it again when it
+  // changes; output is a pipe, which has no size of its own.
+  const stdout = process.stdout as NodeJS.WriteStream & { columns: number; rows: number };
+  const setSize = (columns: unknown, rows: unknown) => {
+    stdout.columns = Number(columns) || 80;
+    stdout.rows = Number(rows) || 24;
+  };
+  setSize(process.env.MAPSCII_COLUMNS, process.env.MAPSCII_ROWS);
+  process.on('message', (message: { type?: string; columns?: number; rows?: number }) => {
+    if (message?.type !== 'resize') return;
+    setSize(message.columns, message.rows);
+    stdout.emit('resize');
+  });
+  // the server went away
+  process.on('disconnect', () => process.exit(0));
+}
 
 // Collect markers from various sources
 const markerInputs: MarkerInput[] = [];
@@ -223,7 +273,8 @@ if (argv.geojson) {
 }
 
 // Read from stdin if available (non-TTY mode)
-const stdinData = await readInitialStdin();
+// (a telnet session's stdin is the client's keyboard)
+const stdinData = telnetSession ? '' : await readInitialStdin();
 if (stdinData) {
   markerInputs.push(...parseMarkersFromText(stdinData));
 }
@@ -234,7 +285,7 @@ let initialLon = argv.longitude;
 let locateOnStart = false;
 let locationSource = '';
 
-if (argv.locate) {
+if (argv.locate && !telnetSession) {
   try {
     const location = await getCurrentLocation();
     initialLat = location.latitude;
@@ -282,7 +333,9 @@ const options = {
   noLabels: argv.noLabels,
   useMouse: argv.mouse,
   searchDatabase,
-  onlineSearch: argv.onlineSearch,
+  // telnet sessions: no searches from strangers on Nominatim in the server's name
+  onlineSearch: argv.onlineSearch && !telnetSession,
+  restricted: telnetSession,
   showAttribution: !argv.noAttribution,
   attribution: argv.attribution,
   ansiScreenshotFile: argv.ansiScreenshot,
@@ -298,10 +351,59 @@ const options = {
   locationSource: locationSource,
 };
 
-const mapscii = new Mapscii(options);
-mapscii.init().catch((err) => {
-  console.error('Failed to start MapSCII.');
-  console.error(err instanceof Error ? err.message : err);
-  // input is already grabbed: without this the terminal waits for Ctrl-C
-  process.exit(1);
-});
+if (argv.telnet !== undefined) {
+  await serveTelnet(argv.telnet);
+} else {
+  const mapscii = new Mapscii(options);
+  mapscii.init().catch((err) => {
+    console.error('Failed to start MapSCII.');
+    console.error(err instanceof Error ? err.message : err);
+    // input is already grabbed: without this the terminal waits for Ctrl-C
+    process.exit(1);
+  });
+}
+
+async function serveTelnet(port: number): Promise<void> {
+  // The sessions get the same map settings as the server
+  const sessionArgs = [
+    '--tile_source', argv.tile_source,
+    '--style_file', argv.style_file,
+    '--latitude', String(argv.latitude),
+    '--longitude', String(argv.longitude),
+    ...(argv.zoom !== null && argv.zoom !== undefined ? ['--zoom', String(argv.zoom)] : []),
+    `--braille=${argv.braille}`,
+    '--colorMode', argv.ansi16 ? 'ansi-16' : argv.colorMode,
+    '--cellRatio', String(argv.cellRatio),
+    `--noLabels=${argv.noLabels}`,
+    `--mouse=${argv.mouse}`,
+    '--attribution', argv.attribution,
+    `--noAttribution=${argv.noAttribution}`,
+    `--terrain=${argv.terrain}`,
+    '--terrainSource', argv.terrainSource,
+    '--terrainMode', argv.terrainMode,
+    '--terrainOpacity', String(argv.terrainOpacity),
+    ...(searchDatabase ? ['--searchDb', searchDatabase] : []),
+    ...(argv.geojson ? ['--geojson', argv.geojson] : []),
+    ...(argv.marker ?? []).flatMap((marker) => ['--marker', String(marker)]),
+    '--telnetSession',
+  ];
+  const runtimeArgs = process.versions.bun ? [] : ['--max-old-space-size=256'];
+  const server = await startTelnetServer({
+    port,
+    host: argv.telnetHost,
+    maxSessions: argv.telnetMaxSessions,
+    maxPerAddress: argv.telnetMaxPerAddress,
+    idleMinutes: argv.telnetIdleMinutes,
+    command: process.execPath,
+    args: [...runtimeArgs, process.argv[1], ...sessionArgs],
+    log: (message) => console.log(`${new Date().toISOString()} ${message}`),
+  });
+  const address = server.server.address();
+  const shown = typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address);
+  console.log(`mapscii telnet server on ${shown}`);
+  const stop = () => {
+    void server.close().then(() => process.exit(0));
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+}

@@ -32,6 +32,20 @@ npm install -g wapscii
 mapscii
 ```
 
+With Nix (flakes):
+
+```sh
+nix run github:wapscii/wapscii                 # try it
+nix profile install github:wapscii/wapscii     # mapscii, wapscii, wapscii-search-index
+```
+
+In a NixOS or home-manager flake: an input `wapscii.url = "github:wapscii/wapscii";`
+and `inputs.wapscii.packages.${system}.default` in your packages (or
+`inputs.wapscii.overlays.default` for `pkgs.wapscii`). Leave out
+`inputs.nixpkgs.follows` for it: the npm packages are checked against a
+hash, and another nixpkgs' bun may install them differently. When
+`bun.lock` changes, `nix build` says the new hash for `nix/package.nix`.
+
 From the source ([Bun](https://bun.sh) builds it):
 
 ```sh
@@ -42,7 +56,7 @@ bun run build
 node bin/mapscii.js
 ```
 
-The original MapSCII is also still around as a demo: `telnet mapscii.me`.
+MapSCII's own demo was `telnet mapscii.me`; wapscii can serve one too (see below).
 
 ## Running
 
@@ -81,7 +95,15 @@ mapscii --no-mouse                       # leave the mouse to the terminal
 
 Tiles are fetched up to the source's highest zoom level (14 for OpenMapTiles) and scaled beyond it.
 
-Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source.
+Downloaded HTTP tiles are cached under `~/.cache/mapscii/sources/`, in one folder per tile source (its `source.txt` says which), so tiles of different servers never mix. `R` empties the folder of the current source. Tile servers on this computer (`localhost`, `127.0.0.1`) aren't cached: their tiles are on disk already.
+
+### Telnet server
+
+```sh
+mapscii --telnet 2323 --telnetHost 0.0.0.0
+```
+
+serves the map like MapSCII's old `telnet mapscii.me`: one session per connection, with its own position and settings. See [docs/telnet.md](./docs/telnet.md) for the limits and running it as a service.
 
 ## Keyboard shortcuts
 

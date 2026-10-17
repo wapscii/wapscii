@@ -45,6 +45,23 @@ jobs:
       - name: Smoke test package
         run: npm pack --dry-run
 
+  nix:
+    # the flake: its build, the tests against its dependencies, and the
+    # npm packages' hash in nix/package.nix (stale after bun.lock changes)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Build and test
+        run: nix flake check -L
+
+      - name: Smoke test
+        run: nix run . -- --help
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -62,6 +62,8 @@ export interface MapsciiConfig {
   colorMode: ColorMode;
   useTileWorker: boolean;
   persistDownloadedTiles: boolean;
+  // Cache the tiles of servers on this computer (localhost) too
+  cacheLocalSources: boolean;
   tileRange: number;
   projectSize: number;
   labelMargin: number;
@@ -96,6 +98,9 @@ export interface MapsciiConfig {
   onlineSearch: boolean;
   // Replaces both of them (library use)
   searchProvider?: SearchProvider;
+  // For people who aren't on this computer (telnet): no keys that write
+  // files, empty the shared cache or look up where the server is
+  restricted: boolean;
 }
 
 // Used unless the tile source names its own (in its TileJSON)
@@ -129,6 +134,7 @@ const config: MapsciiConfig = {
 
   // Downloaded files get persisted in ~/.cache/mapscii
   persistDownloadedTiles: true,
+  cacheLocalSources: false,
 
   tileRange: 14,
   projectSize: 256,
@@ -190,6 +196,8 @@ const config: MapsciiConfig = {
 
   searchDatabase: null,
   onlineSearch: true,
+
+  restricted: false,
 };
 
 export function createMapsciiConfig(overrides: Partial<MapsciiConfig> = {}): MapsciiConfig {
